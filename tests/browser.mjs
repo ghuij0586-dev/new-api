@@ -173,7 +173,11 @@ async function main() {
   await bad.close();
 
   await page.goto(origin + "/", { waitUntil: "networkidle0" });
-  assert.match(await page.title(), /多模态聚合网关/);
+  assert.match(await page.title(), /^融光$/);
+  assert.match(await page.$eval("h1", (el) => el.textContent), /登录融光/);
+  assert.equal((await page.evaluate(() => document.body.innerText)).includes("多模态聚合网关"), false);
+  assert.equal((await page.evaluate(() => document.body.innerText)).includes("内部工作台"), false);
+  await page.screenshot({ path: path.join(OUT, "portal-login.png") });
   await page.type("#nameInput", "小王");
   await page.type("#tokenInput", TOKEN);
   await page.click("#loginSubmit");
@@ -183,7 +187,10 @@ async function main() {
   assert.match(homeText, /工作台/);
   assert.match(homeText, /已连接 · 3 个模型/);
   assert.match(homeText, /看图问答助手/);
+  assert.match(homeText, /融光是同事使用的入口/);
   assert.match(homeText, /不是 New API 官方管理后台/);
+  assert.equal(homeText.includes("多模态聚合网关"), false);
+  assert.equal(homeText.includes("内部工作台"), false);
   assert.equal(homeText.includes("用户 04"), false);
   assert.equal(homeText.includes("模拟"), false);
   assert.equal(homeText.includes(TOKEN), false);
@@ -283,6 +290,8 @@ async function main() {
   assert.match(channelText, /令牌可调用/);
   await page.screenshot({ path: path.join(OUT, "portal-channels.png") });
 
+  await page.evaluate(() => document.querySelector('#nav button[data-tab="home"]').click());
+  await page.waitForSelector("#panel-home.active");
   await page.click("#themeBtn");
   await page.waitForFunction(() => document.documentElement.getAttribute("data-theme") === "dark");
   await page.screenshot({ path: path.join(OUT, "portal-dark.png") });

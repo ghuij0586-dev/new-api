@@ -79,7 +79,7 @@
     var label = theme === "dark" ? "切换为浅色" : "切换为深色";
     $("themeLabel").textContent = label;
     $("loginTheme").textContent = theme === "dark" ? "浅色" : "深色";
-    document.querySelector('meta[name="theme-color"]').setAttribute("content", theme === "dark" ? "#0e1014" : "#f4f6fa");
+    document.querySelector('meta[name="theme-color"]').setAttribute("content", theme === "dark" ? "#12100e" : "#f3eee4");
     storeSet(L.THEME_KEY, theme === "dark" ? "dark" : "light");
   }
   function toggleTheme() {
@@ -322,7 +322,7 @@
     note.textContent = "";
     if (agent.mode === "audio" && state.connected && !audioReady()) {
       note.hidden = false;
-      note.textContent = "模型列表里还没有识别到语音模型，转写尚未接入。门户不会编造文字。管理员接入语音渠道后，刷新即可使用。";
+      note.textContent = "模型列表里还没有识别到语音模型，转写尚未接入。融光不会编造文字。管理员接入语音渠道后，刷新即可使用。";
     } else if (agent.mode === "image" && state.connected && !imageReady()) {
       note.hidden = false;
       note.textContent = "模型列表里还没有识别到生图模型。仍可以试一次；如果网关未配置，会显示错误，不会展示假图片。";
@@ -366,7 +366,7 @@
   function renderFooter() {
     var footer = $("footerNote");
     footer.replaceChildren();
-    footer.append("这是给同事用的门户，不是 New API 官方管理后台。厂商密钥只留在服务器上。渠道、令牌和额度由管理员在 ");
+    footer.append("融光是同事使用的入口，不是 New API 官方管理后台。厂商密钥只留在服务器上。渠道、令牌和额度由管理员在 ");
     var link = document.createElement("a");
     link.href = state.adminUrl || L.defaultAdminUrl(location);
     link.target = "_blank";

@@ -4,26 +4,29 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="robots" content="noindex, nofollow" />
-  <meta name="theme-color" content="#f4f6fa" />
-  <title>多模态聚合网关</title>
+  <meta name="theme-color" content="#f3eee4" />
+  <title>融光</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-  <script src="js/theme.js?v=1"></script>
-  <link rel="stylesheet" href="css/app.css?v=1" />
+  <script src="js/theme.js?v=2"></script>
+  <link rel="stylesheet" href="css/app.css?v=2" />
 </head>
 <body>
   <div id="login" class="login">
-    <form id="loginForm" class="login-card" autocomplete="off">
-      <div class="brand">
-        <div class="logo" aria-hidden="true">
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-            <path d="M3.5 5.5h7.5a3.5 3.5 0 0 1 0 7H8" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/>
-            <path d="M14.5 12.5H7a3.5 3.5 0 0 1 0-7H10" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/>
+    <div class="login-wall">
+      <div class="login-inscription">
+        <div class="seal" aria-hidden="true">
+          <svg viewBox="0 0 32 32" width="36" height="36">
+            <rect x="1.5" y="1.5" width="29" height="29" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <path d="M8 21c4.2-9 11.8-9 16 0" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+            <path d="M10 13.5c3.2 6 8.8 6 12 0" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
           </svg>
         </div>
-        <div class="brand-name">多模态聚合网关<small>内部工作台</small></div>
+        <div class="wordmark">融光</div>
+        <p class="inscription-note">已接入的模型，收在同一处。<br>厂商密钥留在服务器。</p>
       </div>
-      <h1>登录同事工作台</h1>
-      <p class="lead">使用管理员在 New API 里签发的网关令牌。厂商密钥只留在服务器上，不要粘贴到这里。</p>
+    <form id="loginForm" class="login-card" autocomplete="off">
+      <h1>登录融光</h1>
+      <p class="lead">请粘贴管理员在 New API 签发的网关令牌，一般以 sk- 开头。不要粘贴厂商密钥。</p>
       <div id="loginError" class="alert" hidden></div>
       <label class="field">怎么称呼你
         <input class="input" id="nameInput" maxlength="24" placeholder="只保存在这台浏览器，例如：小王" />
@@ -39,26 +42,28 @@
         <label class="field">API 根地址
           <input class="input" id="baseInput" spellcheck="false" placeholder="留空即可。本地打开文件时才填 http://43.110.30.115:3000" />
         </label>
-        <p class="fine">部署到服务器后请保持留空。浏览器只访问这个门户，由服务器把 /v1 转给已经在跑的 New API。直接双击打开网页文件时，跨域可能被浏览器拦住。</p>
+        <p class="fine">部署到服务器后请保持留空。浏览器只访问融光，由服务器把 /v1 转给已经在跑的 New API。直接双击打开网页文件时，跨域可能被浏览器拦住。</p>
       </details>
-      <button class="primary block" id="loginSubmit" type="submit">进入工作台</button>
+      <button class="primary block" id="loginSubmit" type="submit">进入融光</button>
       <div class="login-foot">
         <span class="fine">令牌相当于密码，只存在这台浏览器里。</span>
         <button class="icon-btn" id="loginTheme" type="button">深色</button>
       </div>
     </form>
+    </div>
   </div>
 
   <div id="app" class="shell" hidden>
     <aside class="side">
       <div class="brand">
-        <div class="logo" aria-hidden="true">
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-            <path d="M3.5 5.5h7.5a3.5 3.5 0 0 1 0 7H8" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/>
-            <path d="M14.5 12.5H7a3.5 3.5 0 0 1 0-7H10" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/>
+        <div class="seal seal-sm" aria-hidden="true">
+          <svg viewBox="0 0 32 32" width="28" height="28">
+            <rect x="1.5" y="1.5" width="29" height="29" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <path d="M8 21c4.2-9 11.8-9 16 0" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+            <path d="M10 13.5c3.2 6 8.8 6 12 0" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
           </svg>
         </div>
-        <div class="brand-name">多模态聚合网关<small>内部工作台</small></div>
+        <div class="brand-name">融光</div>
       </div>
       <nav class="menu" id="nav" aria-label="页面">
         <button type="button" data-tab="home" class="active">
@@ -92,7 +97,7 @@
 
     <div class="main">
       <header class="top">
-        <div class="crumb">控制台 / <b id="crumb">工作台</b></div>
+        <div class="crumb">融光 / <b id="crumb">工作台</b></div>
         <div class="top-right">
           <div class="badge" id="statusBadge"><i></i><span id="statusText">正在连接</span></div>
           <button class="user" id="userBtn" type="button" aria-haspopup="dialog">
@@ -127,7 +132,7 @@
               <div class="flow-box">
                 <h3><span class="step">1</span>同事的客户端</h3>
                 <ul class="muted-list">
-                  <li>这个门户，或 Cherry Studio 等应用</li>
+                  <li>融光，或 Cherry Studio 等应用</li>
                   <li>地址：<span id="gatewayUrl">/v1</span> <button class="linkish" id="copyUrl" type="button">复制</button></li>
                   <li>密钥：管理员签发的网关令牌</li>
                 </ul>
@@ -293,8 +298,8 @@
     </form>
   </dialog>
 
-  <noscript><p class="noscript">需要启用浏览器的 JavaScript 才能使用同事门户。</p></noscript>
-  <script src="js/logic.js?v=1"></script>
-  <script src="js/app.js?v=1"></script>
+  <noscript><p class="noscript">需要启用浏览器的 JavaScript 才能使用融光。</p></noscript>
+  <script src="js/logic.js?v=2"></script>
+  <script src="js/app.js?v=2"></script>
 </body>
 </html>

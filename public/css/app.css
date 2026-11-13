@@ -103,7 +103,7 @@ a { color: var(--brand-ink); text-decoration: none; }
 a:hover { text-decoration: underline; }
 ::selection { background: rgba(156, 59, 46, .18); }
 h1, h2, h3, .metric b, .insight .stat strong { font-family: var(--serif); font-weight: 500; }
-.wordmark, .brand-name, .login-card h1, .crumb-name {
+.login-card h1 {
   font-family: "Rongguang Brush", "Rongguang Serif", "Songti SC", "STSong", serif;
   font-weight: 400;
 }
@@ -126,13 +126,16 @@ h1, h2, h3, .metric b, .insight .stat strong { font-family: var(--serif); font-w
 .seal-lg { width: 92px; height: 92px; }
 .seal-sm { width: 42px; height: 42px; }
 .seal-xs { width: 22px; height: 22px; }
-.mark-lockup { display: flex; align-items: center; gap: 18px; margin: 0 0 18px; }
-.wordmark {
-  margin: 0;
-  font-size: 84px;
-  line-height: 1.05;
-  letter-spacing: .04em;
+.login-inscription { display: flex; flex-direction: column; align-items: center; text-align: center; }
+.logo-full { width: min(280px, 100%); height: auto; display: block; margin: 0 0 8px; }
+.logo-mark { width: 56px; height: 56px; display: block; }
+.logo-mark-xs { width: 28px; height: 28px; }
+html[data-theme="dark"] .logo-full,
+html[data-theme="dark"] .logo-mark {
+  background: #f3eee4;
 }
+html[data-theme="dark"] .logo-full { border-radius: 18px; padding: 8px; }
+html[data-theme="dark"] .logo-mark { border-radius: 50%; padding: 3px; }
 .inscription-note { margin: 0; max-width: 22em; color: var(--text-2); font-size: 14px; }
 .login-card {
   background: transparent;
@@ -190,8 +193,7 @@ h1, h2, h3, .metric b, .insight .stat strong { font-family: var(--serif); font-w
   display: flex; flex-direction: column; padding: 28px 22px 18px;
 }
 .brand { display: flex; align-items: center; gap: 10px; }
-.side .brand { padding: 0 2px 28px; align-items: center; }
-.brand-name { font-size: 32px; letter-spacing: .04em; line-height: 1.2; }
+.side .brand { padding: 0 2px 22px; align-items: center; }
 .brand-name small { display: block; margin-top: 6px; font-family: var(--font); font-size: 11px; font-weight: 400; letter-spacing: .12em; color: var(--text-3); }
 nav.menu { display: flex; flex-direction: column; gap: 2px; }
 nav.menu button {
@@ -215,8 +217,6 @@ nav.menu button.active svg { opacity: 1; color: var(--brand); }
   background: var(--bg-top); backdrop-filter: blur(16px);
 }
 .crumb { display: flex; align-items: center; gap: 8px; color: var(--text-3); font-size: 13px; letter-spacing: .08em; }
-.crumb-name { font-size: 20px; letter-spacing: .06em; color: var(--text); line-height: 1; }
-.crumb-sep { color: var(--text-3); }
 .crumb b { color: var(--text); font-weight: 500; font-family: var(--serif); }
 .top-right { display: flex; align-items: center; gap: 16px; }
 .badge {
@@ -415,16 +415,14 @@ footer.note { margin-top: 36px; color: var(--text-3); font-size: 12px; line-heig
   .login { padding: 28px 18px 40px; }
   .login-wall { grid-template-columns: 1fr; gap: 28px; }
   .login-card { border-left: 0; border-top: 1px solid var(--line); padding: 24px 0 0; }
-  .mark-lockup { gap: 14px; }
-  .seal-lg { width: 72px; height: 72px; }
-  .wordmark { font-size: 60px; }
+  .logo-full { width: min(220px, 86vw); }
   .side {
     position: sticky; top: 0; z-index: 20; height: auto; width: 100%;
     flex-direction: row; align-items: center; gap: 8px; padding: 12px 14px;
     border-right: 0; border-bottom: 1px solid var(--line);
   }
   .side .brand { padding: 0 4px 0 0; flex: none; }
-  .brand-name { font-size: 28px; }
+  .logo-mark { width: 44px; height: 44px; }
   .brand-name small { display: none; }
   nav.menu { flex-direction: row; overflow: auto; flex: 1; min-width: 0; }
   nav.menu button { width: auto; white-space: nowrap; border-left: 0; border-bottom: 2px solid transparent; padding: 8px 10px; }
@@ -445,8 +443,7 @@ footer.note { margin-top: 36px; color: var(--text-3); font-size: 12px; line-heig
 @media (max-width: 640px) {
   .metrics, .agents { grid-template-columns: 1fr; }
   .badge { display: none; }
-  .wordmark { font-size: 52px; letter-spacing: .03em; }
-  .crumb-name, .crumb-sep { display: none; }
+  .logo-full { width: min(200px, 78vw); }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

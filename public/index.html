@@ -11,21 +11,10 @@
   <link rel="stylesheet" href="css/app.css?v=3" />
 </head>
 <body>
-  <svg class="sprite" aria-hidden="true" focusable="false">
-    <symbol id="rongguang-mark" viewBox="0 0 64 64">
-      <rect x="3" y="3" width="58" height="58" fill="none" stroke="currentColor" stroke-width="2"/>
-      <path d="M16 34c6-16 26-16 32 0" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/>
-      <path d="M16 30c6 16 26 16 32 0" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/>
-      <circle cx="32" cy="32" r="2.6" fill="currentColor"/>
-    </symbol>
-  </svg>
   <div id="login" class="login">
     <div class="login-wall">
       <div class="login-inscription">
-        <div class="mark-lockup">
-          <svg class="seal seal-lg" viewBox="0 0 64 64" aria-hidden="true"><use href="#rongguang-mark"/></svg>
-          <div class="wordmark">融光</div>
-        </div>
+        <img class="logo-full" src="logo.svg" alt="融光" />
         <p class="inscription-note">已接入的模型，收在同一处。<br>厂商密钥留在服务器。</p>
       </div>
     <form id="loginForm" class="login-card" autocomplete="off">
@@ -60,8 +49,7 @@
   <div id="app" class="shell" hidden>
     <aside class="side">
       <div class="brand">
-        <svg class="seal seal-sm" viewBox="0 0 64 64" aria-hidden="true"><use href="#rongguang-mark"/></svg>
-        <div class="brand-name">融光</div>
+        <img class="logo-mark" src="mark.svg" alt="融光" />
       </div>
       <nav class="menu" id="nav" aria-label="页面">
         <button type="button" data-tab="home" class="active">
@@ -96,9 +84,7 @@
     <div class="main">
       <header class="top">
         <div class="crumb">
-          <svg class="seal seal-xs" viewBox="0 0 64 64" aria-hidden="true"><use href="#rongguang-mark"/></svg>
-          <span class="crumb-name">融光</span>
-          <span class="crumb-sep">/</span>
+          <img class="logo-mark logo-mark-xs" src="mark.svg" alt="" />
           <b id="crumb">工作台</b>
         </div>
         <div class="top-right">

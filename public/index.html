@@ -7,21 +7,14 @@
   <meta name="theme-color" content="#f3eee4" />
   <title>融光</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-  <script src="js/theme.js?v=2"></script>
-  <link rel="stylesheet" href="css/app.css?v=2" />
+  <script src="js/theme.js?v=3"></script>
+  <link rel="stylesheet" href="css/app.css?v=3" />
 </head>
 <body>
   <div id="login" class="login">
     <div class="login-wall">
       <div class="login-inscription">
-        <div class="seal" aria-hidden="true">
-          <svg viewBox="0 0 32 32" width="36" height="36">
-            <rect x="1.5" y="1.5" width="29" height="29" fill="none" stroke="currentColor" stroke-width="1.2"/>
-            <path d="M8 21c4.2-9 11.8-9 16 0" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-            <path d="M10 13.5c3.2 6 8.8 6 12 0" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="wordmark">融光</div>
+        <img class="logo-full" src="logo.svg" alt="融光" />
         <p class="inscription-note">已接入的模型，收在同一处。<br>厂商密钥留在服务器。</p>
       </div>
     <form id="loginForm" class="login-card" autocomplete="off">
@@ -56,14 +49,7 @@
   <div id="app" class="shell" hidden>
     <aside class="side">
       <div class="brand">
-        <div class="seal seal-sm" aria-hidden="true">
-          <svg viewBox="0 0 32 32" width="28" height="28">
-            <rect x="1.5" y="1.5" width="29" height="29" fill="none" stroke="currentColor" stroke-width="1.2"/>
-            <path d="M8 21c4.2-9 11.8-9 16 0" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-            <path d="M10 13.5c3.2 6 8.8 6 12 0" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="brand-name">融光</div>
+        <img class="logo-mark" src="mark.svg" alt="融光" />
       </div>
       <nav class="menu" id="nav" aria-label="页面">
         <button type="button" data-tab="home" class="active">
@@ -97,7 +83,10 @@
 
     <div class="main">
       <header class="top">
-        <div class="crumb">融光 / <b id="crumb">工作台</b></div>
+        <div class="crumb">
+          <img class="logo-mark logo-mark-xs" src="mark.svg" alt="" />
+          <b id="crumb">工作台</b>
+        </div>
         <div class="top-right">
           <div class="badge" id="statusBadge"><i></i><span id="statusText">正在连接</span></div>
           <button class="user" id="userBtn" type="button" aria-haspopup="dialog">
@@ -299,7 +288,7 @@
   </dialog>
 
   <noscript><p class="noscript">需要启用浏览器的 JavaScript 才能使用融光。</p></noscript>
-  <script src="js/logic.js?v=2"></script>
-  <script src="js/app.js?v=2"></script>
+  <script src="js/logic.js?v=3"></script>
+  <script src="js/app.js?v=3"></script>
 </body>
 </html>

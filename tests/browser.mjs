@@ -44,6 +44,7 @@ function startServer() {
     ".css": "text/css; charset=utf-8",
     ".js": "text/javascript; charset=utf-8",
     ".svg": "image/svg+xml",
+    ".woff2": "font/woff2",
     ".txt": "text/plain"
   };
   const server = http.createServer((req, res) => {
@@ -174,7 +175,14 @@ async function main() {
 
   await page.goto(origin + "/", { waitUntil: "networkidle0" });
   assert.match(await page.title(), /^融光$/);
-  assert.match(await page.$eval("h1", (el) => el.textContent), /登录融光/);
+  assert.match(await page.$eval("h1", (el) => el.textContent), /^登录融光$/);
+  assert.equal(await page.$eval(".logo-full", (el) => el.alt), "融光");
+  assert.equal(await page.$eval(".brand .logo-mark", (el) => el.getAttribute("src")), "mark.svg");
+  assert.equal(await page.evaluate(() => document.querySelector(".wordmark, .brand-name")), null);
+  await page.evaluate(() => document.fonts.ready);
+  assert.equal(await page.evaluate(() => document.fonts.check('48px "Rongguang Brush"')), true);
+  const brush = await page.evaluate(() => getComputedStyle(document.querySelector(".login-card h1")).fontFamily);
+  assert.match(brush, /Rongguang Brush/);
   assert.equal((await page.evaluate(() => document.body.innerText)).includes("多模态聚合网关"), false);
   assert.equal((await page.evaluate(() => document.body.innerText)).includes("内部工作台"), false);
   assert.equal((await page.evaluate(() => document.body.innerText)).includes("内部同事使用"), false);

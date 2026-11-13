@@ -1,0 +1,12 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
+.idea/
+.vscode/
+*.log
+npm-debug.log*
+.playwright/
+.cache/

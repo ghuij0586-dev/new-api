@@ -1,0 +1,16 @@
+# 只启动同事门户。不会创建、停止或替换已经在跑的 new-api 容器。
+name: gateway-portal
+
+services:
+  portal:
+    build: .
+    image: gateway-portal:local
+    container_name: gateway-portal
+    restart: always
+    ports:
+      - "80:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      NEW_API_UPSTREAM: ${NEW_API_UPSTREAM:-host.docker.internal:3000}
+      NGINX_ENVSUBST_FILTER: "^NEW_API_UPSTREAM$$"

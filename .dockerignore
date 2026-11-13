@@ -1,0 +1,9 @@
+.git
+.env
+.env.*
+node_modules
+tests
+*.md
+scripts
+.vscode
+.idea

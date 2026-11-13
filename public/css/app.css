@@ -5,6 +5,13 @@
   font-style: normal;
   font-display: swap;
 }
+@font-face {
+  font-family: "Rongguang Brush";
+  src: url("../fonts/rongguang-brush.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
 :root {
   --bg: #f3eee4;
   --bg-side: #f7f3ea;
@@ -95,7 +102,11 @@ button { cursor: pointer; }
 a { color: var(--brand-ink); text-decoration: none; }
 a:hover { text-decoration: underline; }
 ::selection { background: rgba(156, 59, 46, .18); }
-h1, h2, h3, .wordmark, .brand-name, .metric b, .insight .stat strong { font-family: var(--serif); font-weight: 500; }
+h1, h2, h3, .metric b, .insight .stat strong { font-family: var(--serif); font-weight: 500; }
+.wordmark, .brand-name, .login-card h1, .crumb-name {
+  font-family: "Rongguang Brush", "Rongguang Serif", "Songti SC", "STSong", serif;
+  font-weight: 400;
+}
 
 .login {
   min-height: 100vh;
@@ -110,19 +121,17 @@ h1, h2, h3, .wordmark, .brand-name, .metric b, .insight .stat strong { font-fami
   gap: 72px;
   align-items: center;
 }
-.seal { color: var(--brand); display: inline-flex; }
-.seal-sm { width: 28px; height: 28px; flex: none; }
-.eyebrow {
-  margin: 18px 0 0;
-  color: var(--text-3);
-  font-size: 12px;
-  letter-spacing: .22em;
-}
+.sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+.seal { color: var(--brand); display: block; flex: none; }
+.seal-lg { width: 92px; height: 92px; }
+.seal-sm { width: 42px; height: 42px; }
+.seal-xs { width: 22px; height: 22px; }
+.mark-lockup { display: flex; align-items: center; gap: 18px; margin: 0 0 18px; }
 .wordmark {
-  margin: 8px 0 12px;
-  font-size: 76px;
-  line-height: 1;
-  letter-spacing: .2em;
+  margin: 0;
+  font-size: 84px;
+  line-height: 1.05;
+  letter-spacing: .04em;
 }
 .inscription-note { margin: 0; max-width: 22em; color: var(--text-2); font-size: 14px; }
 .login-card {
@@ -132,7 +141,7 @@ h1, h2, h3, .wordmark, .brand-name, .metric b, .insight .stat strong { font-fami
   padding: 8px 0 8px 40px;
   box-shadow: none;
 }
-.login-card h1 { margin: 0 0 8px; font-size: 32px; letter-spacing: .06em; }
+.login-card h1 { margin: 0 0 10px; font-size: 40px; letter-spacing: .03em; line-height: 1.25; }
 .lead { margin: 0 0 22px; color: var(--text-2); font-size: 14px; }
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; color: var(--text-2); font-size: 13px; }
 .input, .search {
@@ -181,8 +190,8 @@ h1, h2, h3, .wordmark, .brand-name, .metric b, .insight .stat strong { font-fami
   display: flex; flex-direction: column; padding: 28px 22px 18px;
 }
 .brand { display: flex; align-items: center; gap: 10px; }
-.side .brand { padding: 0 4px 28px; align-items: flex-start; }
-.brand-name { font-size: 22px; letter-spacing: .18em; line-height: 1.1; }
+.side .brand { padding: 0 2px 28px; align-items: center; }
+.brand-name { font-size: 32px; letter-spacing: .04em; line-height: 1.2; }
 .brand-name small { display: block; margin-top: 6px; font-family: var(--font); font-size: 11px; font-weight: 400; letter-spacing: .12em; color: var(--text-3); }
 nav.menu { display: flex; flex-direction: column; gap: 2px; }
 nav.menu button {
@@ -205,7 +214,9 @@ nav.menu button.active svg { opacity: 1; color: var(--brand); }
   padding: 0 40px; border-bottom: 1px solid transparent;
   background: var(--bg-top); backdrop-filter: blur(16px);
 }
-.crumb { color: var(--text-3); font-size: 13px; letter-spacing: .08em; }
+.crumb { display: flex; align-items: center; gap: 8px; color: var(--text-3); font-size: 13px; letter-spacing: .08em; }
+.crumb-name { font-size: 20px; letter-spacing: .06em; color: var(--text); line-height: 1; }
+.crumb-sep { color: var(--text-3); }
 .crumb b { color: var(--text); font-weight: 500; font-family: var(--serif); }
 .top-right { display: flex; align-items: center; gap: 16px; }
 .badge {
@@ -404,14 +415,16 @@ footer.note { margin-top: 36px; color: var(--text-3); font-size: 12px; line-heig
   .login { padding: 28px 18px 40px; }
   .login-wall { grid-template-columns: 1fr; gap: 28px; }
   .login-card { border-left: 0; border-top: 1px solid var(--line); padding: 24px 0 0; }
-  .wordmark { font-size: 56px; }
+  .mark-lockup { gap: 14px; }
+  .seal-lg { width: 72px; height: 72px; }
+  .wordmark { font-size: 60px; }
   .side {
     position: sticky; top: 0; z-index: 20; height: auto; width: 100%;
     flex-direction: row; align-items: center; gap: 8px; padding: 12px 14px;
     border-right: 0; border-bottom: 1px solid var(--line);
   }
   .side .brand { padding: 0 4px 0 0; flex: none; }
-  .brand-name { font-size: 18px; }
+  .brand-name { font-size: 28px; }
   .brand-name small { display: none; }
   nav.menu { flex-direction: row; overflow: auto; flex: 1; min-width: 0; }
   nav.menu button { width: auto; white-space: nowrap; border-left: 0; border-bottom: 2px solid transparent; padding: 8px 10px; }
@@ -432,7 +445,8 @@ footer.note { margin-top: 36px; color: var(--text-3); font-size: 12px; line-heig
 @media (max-width: 640px) {
   .metrics, .agents { grid-template-columns: 1fr; }
   .badge { display: none; }
-  .wordmark { font-size: 48px; letter-spacing: .16em; }
+  .wordmark { font-size: 52px; letter-spacing: .03em; }
+  .crumb-name, .crumb-sep { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

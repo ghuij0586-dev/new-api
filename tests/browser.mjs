@@ -177,6 +177,7 @@ async function main() {
   assert.match(await page.$eval("h1", (el) => el.textContent), /登录融光/);
   assert.equal((await page.evaluate(() => document.body.innerText)).includes("多模态聚合网关"), false);
   assert.equal((await page.evaluate(() => document.body.innerText)).includes("内部工作台"), false);
+  assert.equal((await page.evaluate(() => document.body.innerText)).includes("内部同事使用"), false);
   await page.screenshot({ path: path.join(OUT, "portal-login.png") });
   await page.type("#nameInput", "小王");
   await page.type("#tokenInput", TOKEN);
@@ -191,6 +192,7 @@ async function main() {
   assert.match(homeText, /不是 New API 官方管理后台/);
   assert.equal(homeText.includes("多模态聚合网关"), false);
   assert.equal(homeText.includes("内部工作台"), false);
+  assert.equal(homeText.includes("内部同事使用"), false);
   assert.equal(homeText.includes("用户 04"), false);
   assert.equal(homeText.includes("模拟"), false);
   assert.equal(homeText.includes(TOKEN), false);

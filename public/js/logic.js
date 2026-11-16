@@ -337,7 +337,7 @@
     if (status === 401 || /invalid token|无效的令牌|unauthorized|未授权|access token is invalid/.test(low)) {
       title = "令牌无效、已过期或已被禁用。";
     } else if (status === 403 || /无权|permission denied|forbidden/.test(low)) {
-      title = "这把令牌没有权限调用该模型。";
+      title = context === "ledger" ? "这把令牌读不到用量。" : "这把令牌没有权限调用该模型。";
     } else if (status === 402 || /quota|insufficient|额度不足|额度已用|余额不足|used up/.test(low)) {
       title = "额度不足，网关拒绝了这次调用。";
     } else if (status === 429 || /rate limit|负载已饱和|too many requests/.test(low)) {
@@ -479,6 +479,206 @@
     return status === 400 || status === 404 || status === 405 || status === 415 || status === 501;
   }
 
+  var QUOTA_PER_USD = 500000;
+
+  function classifyLedgerQuestion(text) {
+    var q = String(text || "").replace(/\s+/g, "");
+    if (!q) return { intent: "help", range: "all" };
+    var range = "all";
+    if (/今天|今日/.test(q)) range = "today";
+    else if (/这个月|本月|这月/.test(q)) range = "month";
+    if (/各模型|分模型|每个模型|哪个模型|按模型/.test(q)) return { intent: "byModel", range: range };
+    if (/还剩|剩余|还有多少|余额/.test(q)) return { intent: "remaining", range: range };
+    if (range === "today") return { intent: "today", range: "today" };
+    if (/多少钱|花了|花费|金额|费用|美元|美金/.test(q)) return { intent: "money", range: range };
+    if (/额度/.test(q) && !/token/i.test(q)) return { intent: "usedQuota", range: range };
+    if (/token|用量|用了多少/i.test(q)) return { intent: "tokens", range: range };
+    return { intent: "help", range: "all" };
+  }
+
+  function ledgerHelpText() {
+    return "澄账只查询你这把令牌的用量和金额。可以问：我用了多少 token、这个月花了多少钱、还剩多少额度、各模型用了多少、今天的用量。";
+  }
+
+  function logTimeMs(log) {
+    var raw = Number(log && (log.created_at != null ? log.created_at : log.createdAt));
+    if (!isFinite(raw) || raw <= 0) return 0;
+    return raw > 1e12 ? raw : raw * 1000;
+  }
+
+  function rangeBounds(range, now) {
+    var end = now instanceof Date ? now : new Date(now || Date.now());
+    var start;
+    if (range === "today") start = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+    else if (range === "month") start = new Date(end.getFullYear(), end.getMonth(), 1);
+    else start = new Date(0);
+    return { start: start.getTime(), end: end.getTime(), label: rangeLabel(range, end) };
+  }
+
+  function rangeLabel(range, end) {
+    var y = end.getFullYear();
+    var m = end.getMonth() + 1;
+    var d = end.getDate();
+    if (range === "today") return y + "年" + m + "月" + d + "日（按你这台电脑的日期）";
+    if (range === "month") return y + "年" + m + "月1日至今";
+    return "最近返回的调用记录";
+  }
+
+  function formatDay(ms) {
+    var dt = new Date(ms);
+    return dt.getFullYear() + "-" + pad2(dt.getMonth() + 1) + "-" + pad2(dt.getDate());
+  }
+
+  function pad2(n) { return n < 10 ? "0" + n : String(n); }
+
+  function usdFromQuota(quota) {
+    return Number(quota || 0) / QUOTA_PER_USD;
+  }
+
+  function formatUsd(quota) {
+    var value = usdFromQuota(quota);
+    var digits = value >= 1 ? 2 : 4;
+    return value.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: digits }) + " 美元";
+  }
+
+  function moneyNote() {
+    return "金额按网关默认换算：500000 额度点约等于 1 美元。如果管理员改过换算比例，请以 New API 管理后台显示的金额为准。";
+  }
+
+  function normalizeLedgerLogs(raw) {
+    var list = Array.isArray(raw) ? raw : [];
+    var out = [];
+    for (var i = 0; i < list.length; i++) {
+      var item = list[i] || {};
+      var prompt = Number(item.prompt_tokens || item.promptTokens || 0);
+      var completion = Number(item.completion_tokens || item.completionTokens || 0);
+      var quota = Number(item.quota || 0);
+      if (!isFinite(prompt)) prompt = 0;
+      if (!isFinite(completion)) completion = 0;
+      if (!isFinite(quota)) quota = 0;
+      var type = Number(item.type);
+      var tokens = prompt + completion;
+      if (isFinite(type) && type !== 2) continue;
+      if (tokens <= 0 && quota <= 0) continue;
+      out.push({
+        model: String(item.model_name || item.modelName || "未标明模型"),
+        prompt: prompt,
+        completion: completion,
+        tokens: tokens,
+        quota: quota,
+        at: logTimeMs(item)
+      });
+    }
+    return out;
+  }
+
+  function filterLedgerLogs(logs, bounds) {
+    if (!bounds || bounds.start <= 0) return logs.slice();
+    return logs.filter(function (log) { return log.at >= bounds.start && log.at <= bounds.end; });
+  }
+
+  function sumLedger(logs) {
+    var prompt = 0;
+    var completion = 0;
+    var quota = 0;
+    var byModel = {};
+    for (var i = 0; i < logs.length; i++) {
+      var log = logs[i];
+      prompt += log.prompt;
+      completion += log.completion;
+      quota += log.quota;
+      if (!byModel[log.model]) byModel[log.model] = { tokens: 0, prompt: 0, completion: 0, quota: 0, count: 0 };
+      byModel[log.model].tokens += log.tokens;
+      byModel[log.model].prompt += log.prompt;
+      byModel[log.model].completion += log.completion;
+      byModel[log.model].quota += log.quota;
+      byModel[log.model].count += 1;
+    }
+    return { count: logs.length, prompt: prompt, completion: completion, tokens: prompt + completion, quota: quota, byModel: byModel };
+  }
+
+  function explainLedgerFailure(error) {
+    if (!error) return "";
+    if (typeof error === "string") return error;
+    return error.detail ? error.title + " " + error.detail : error.title;
+  }
+
+  function answerLedger(question, data, now) {
+    var parsed = classifyLedgerQuestion(question);
+    var quota = data && data.quota;
+    var quotaSummaryText = quota ? quotaSummary(quota) : null;
+    var rawLogs = Array.isArray(data && data.logs) ? data.logs : [];
+    var logs = normalizeLedgerLogs(rawLogs);
+    var bounds = rangeBounds(parsed.range, now || new Date());
+    var ranged = parsed.range === "all" ? logs : filterLedgerLogs(logs, bounds);
+    var incomplete = rawLogs.length >= 1000;
+    var lines = [];
+    if (parsed.intent === "help") return { text: ledgerHelpText(), error: false };
+
+    if (parsed.intent === "usedQuota") {
+      if (!quotaSummaryText || !quotaSummaryText.known) {
+        return { text: explainLedgerFailure(data && data.quotaError) || "没有读到这把令牌的额度。", error: true };
+      }
+      lines.push("这把令牌已用 " + formatCount(quotaSummaryText.used) + " 额度点。");
+      if (!quotaSummaryText.unlimited && quotaSummaryText.percent != null) {
+        lines.push("总额 " + formatCount(quotaSummaryText.granted) + "，已用 " + quotaSummaryText.percent + "%。");
+      }
+      lines.push("额度点不是 token 数。");
+      return { text: lines.join("\n"), error: false };
+    }
+
+    if (parsed.intent === "remaining") {
+      if (!quotaSummaryText || !quotaSummaryText.known) {
+        return { text: explainLedgerFailure(data && data.quotaError) || "没有读到这把令牌的额度。", error: true };
+      }
+      if (quotaSummaryText.unlimited) {
+        lines.push("这把令牌" + (quotaSummaryText.name ? "「" + quotaSummaryText.name + "」" : "") + "不限额。");
+        lines.push("累计已用额度点 " + formatCount(quotaSummaryText.used) + "。");
+      } else {
+        lines.push("这把令牌" + (quotaSummaryText.name ? "「" + quotaSummaryText.name + "」" : "") + "剩余 " + formatCount(quotaSummaryText.available) + " 额度点。");
+        lines.push("总额 " + formatCount(quotaSummaryText.granted) + "，已用 " + formatCount(quotaSummaryText.used) + (quotaSummaryText.percent == null ? "。" : "（" + quotaSummaryText.percent + "%）。"));
+        lines.push("剩余额度大约 " + formatUsd(quotaSummaryText.available) + "。");
+        lines.push(moneyNote());
+      }
+      return { text: lines.join("\n"), error: false };
+    }
+
+    if (data && data.logError && (parsed.intent === "tokens" || parsed.intent === "money" || parsed.intent === "byModel" || parsed.intent === "today")) {
+      var fallback = explainLedgerFailure(data.logError);
+      if (parsed.intent === "tokens" && quotaSummaryText && quotaSummaryText.known) {
+        return { text: "调用记录没有读到，所以不能统计 token 条数。\n" + fallback + "\n当前已用额度点是 " + formatCount(quotaSummaryText.used) + "，这不是 token 数。", error: true };
+      }
+      return { text: "调用记录没有读到，不能按日期或模型统计。\n" + fallback, error: true };
+    }
+
+    var sum = sumLedger(ranged);
+    if (parsed.intent === "byModel") {
+      var names = Object.keys(sum.byModel);
+      if (!names.length) {
+        lines.push(bounds.label + "没有可统计的调用。");
+      } else {
+        lines.push(bounds.label + "，按模型：");
+        names.sort(function (a, b) { return sum.byModel[b].tokens - sum.byModel[a].tokens; });
+        names.forEach(function (name) {
+          var row = sum.byModel[name];
+          lines.push(name + "：" + formatCount(row.tokens) + " token（输入 " + formatCount(row.prompt) + "，输出 " + formatCount(row.completion) + "），" + formatCount(row.quota) + " 额度点，约 " + formatUsd(row.quota) + "。");
+        });
+        lines.push(moneyNote());
+      }
+    } else if (parsed.intent === "money") {
+      lines.push(bounds.label + "，这把令牌消耗 " + formatCount(sum.quota) + " 额度点，约 " + formatUsd(sum.quota) + "。");
+      lines.push("共 " + formatCount(sum.count) + " 次调用。");
+      lines.push(moneyNote());
+    } else {
+      lines.push(bounds.label + "，合计 " + formatCount(sum.tokens) + " token。");
+      lines.push("输入 " + formatCount(sum.prompt) + "，输出 " + formatCount(sum.completion) + "，共 " + formatCount(sum.count) + " 次。");
+      if (parsed.intent === "today") lines.push("同期额度点 " + formatCount(sum.quota) + "，约 " + formatUsd(sum.quota) + "。\n" + moneyNote());
+    }
+    if (incomplete) lines.push("接口只返回最近一批记录。如果调用很多，更早的用量可能没有算进来。");
+    if (!sum.count && parsed.intent !== "byModel") lines[0] = bounds.label + "没有调用记录，因此 token 和金额都是 0。";
+    return { text: lines.join("\n"), error: false };
+  }
+
   function defaultAdminUrl(locationLike) {
     var loc = locationLike || {};
     if (!loc.protocol || loc.protocol === "file:") return "http://43.110.30.115:3000";
@@ -517,6 +717,11 @@
     quotaSummary: quotaSummary,
     formatCount: formatCount,
     shouldFallbackImage: shouldFallbackImage,
-    defaultAdminUrl: defaultAdminUrl
+    defaultAdminUrl: defaultAdminUrl,
+    QUOTA_PER_USD: QUOTA_PER_USD,
+    classifyLedgerQuestion: classifyLedgerQuestion,
+    ledgerHelpText: ledgerHelpText,
+    normalizeLedgerLogs: normalizeLedgerLogs,
+    answerLedger: answerLedger
   };
 });

@@ -240,6 +240,28 @@ nav.menu button.active svg { opacity: 1; color: var(--brand); }
   display: grid; place-items: center;
 }
 .user span { font-size: 13px; }
+.ledger-fab {
+  width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%;
+  background: transparent; color: var(--ink);
+  display: grid; place-items: center;
+}
+.ledger-fab svg { width: 40px; height: 40px; display: block; }
+.ledger-fab:hover { color: var(--brand); }
+.ledger-seal { fill: var(--brand); }
+.ledger-entry { margin: 0 0 18px; }
+.agent.agent-ledger {
+  display: grid; grid-template-columns: auto 1fr; align-items: center;
+  gap: 22px; min-height: 0; padding: 16px 22px;
+}
+.ledger-avatar {
+  width: 92px; height: 92px; border: 0; border-radius: 50%;
+  display: grid; place-items: center; color: var(--ink); background: transparent;
+}
+.ledger-avatar svg { width: 92px; height: 92px; display: block; }
+.ledger-copy { display: flex; flex-direction: column; gap: 6px; text-align: left; }
+.ledger-copy h3 { font-size: 22px; letter-spacing: .14em; }
+.chat-mode.ledger-mode .work { grid-template-columns: 1fr; }
+.chat-mode.ledger-mode .work > .card:not(.stage) { display: none; }
 .content { padding: 28px 40px 56px; max-width: 1160px; width: 100%; }
 .content.chat-mode { max-width: none; height: auto; flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; padding-bottom: 16px; }
 body:has(.content.chat-mode) { height: 100vh; overflow: hidden; }

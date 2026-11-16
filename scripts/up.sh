@@ -35,7 +35,10 @@ echo
 echo "门户健康检查："
 curl -fsS http://127.0.0.1/healthz
 echo
-echo "转发检查（没有令牌时看到 401，说明已经转到 New API）："
+echo "工作站接口："
+curl -fsS http://127.0.0.1/api/rg/health
+echo
+echo "转发检查（没有令牌时看到 401，说明 /v1 已经转到 New API）："
 code="$(curl -sS -o /tmp/gateway-portal-models.json -w '%{http_code}' http://127.0.0.1/v1/models || true)"
 echo "HTTP ${code}"
 head -c 180 /tmp/gateway-portal-models.json || true
@@ -47,3 +50,4 @@ fi
 rm -f /tmp/gateway-portal-models.json
 echo "同事打开：http://43.110.30.115/"
 echo "管理后台仍然是：http://43.110.30.115:3000"
+echo "项目、资料和会话在数据卷 rongguang-data 里。不要执行 docker volume rm，也不要停止 new-api。"

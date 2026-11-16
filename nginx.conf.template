@@ -3,13 +3,18 @@ upstream new_api {
     keepalive 8;
 }
 
+upstream rongguang_bff {
+    server ${BFF_UPSTREAM};
+    keepalive 4;
+}
+
 server {
     listen 80;
     server_name _;
     server_tokens off;
     root /usr/share/nginx/html;
     index index.html;
-    client_max_body_size 32m;
+    client_max_body_size 16m;
 
     gzip on;
     gzip_proxied off;
@@ -27,6 +32,23 @@ server {
         return 200 "ok\n";
     }
 
+    # 工作站自己的接口。浏览器只带会话 cookie，不带项目钥匙。
+    location /api/rg/ {
+        proxy_pass http://rongguang_bff;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Authorization "";
+        proxy_set_header Connection "";
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_read_timeout 600s;
+        proxy_send_timeout 600s;
+    }
+
+    # 外部客户端如果自带钥匙，仍可走原来的 /v1。工作站页面不使用这条路径。
     location /v1/ {
         proxy_pass http://new_api;
         proxy_http_version 1.1;

@@ -86,6 +86,20 @@ async function main() {
   const external = [];
   const pageErrors = [];
   let chatMode = "hello";
+  let ledgerCalls = 0;
+  function ledgerLogs() {
+    const now = Math.floor(Date.now() / 1000);
+    return {
+      success: true,
+      message: "",
+      data: [
+        { model_name: "deepseek-flash", prompt_tokens: 800, completion_tokens: 200, quota: 250000, created_at: now - 3600, type: 2 },
+        { model_name: "kimi-k2", prompt_tokens: 100, completion_tokens: 50, quota: 100000, created_at: now - 7200, type: 2 },
+        { model_name: "old-model", prompt_tokens: 9999, completion_tokens: 1, quota: 999999, created_at: now - 40 * 86400, type: 2 },
+        { model_name: "充值", prompt_tokens: 0, completion_tokens: 0, quota: 5000000, created_at: now, type: 1 }
+      ]
+    };
+  }
   let imageMode = "ok";
   let audioCalls = 0;
   let chatBodies = [];
@@ -117,6 +131,11 @@ async function main() {
     }
     if (url.includes("/api/usage/token")) {
       respond(req, 200, usage);
+      return;
+    }
+    if (url.includes("/api/log/token")) {
+      ledgerCalls += 1;
+      respond(req, 200, ledgerLogs());
       return;
     }
     if (url.includes("/v1/chat/completions")) {
@@ -314,6 +333,65 @@ async function main() {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   assert.ok(overflow < 8, "mobile page overflows by " + overflow);
   await page.screenshot({ path: path.join(OUT, "portal-mobile.png") });
+
+  await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
+  await page.click('#nav button[data-tab="agents"]');
+  await page.waitForSelector("#ledgerEntry .ledger-avatar");
+  const avatarSize = await page.$eval("#ledgerEntry .ledger-avatar", (el) => {
+    const box = el.getBoundingClientRect();
+    return { w: box.width, h: box.height };
+  });
+  assert.ok(avatarSize.w >= 80 && avatarSize.h >= 80, "ledger avatar is too small");
+  await page.screenshot({ path: path.join(OUT, "portal-ledger-entry-dark.png") });
+  const chatsBefore = chatBodies.length;
+  await page.click("#ledgerFab");
+  await page.waitForFunction(() => document.querySelector("#chatHeading") && document.querySelector("#chatHeading").textContent === "澄账");
+  await page.type("#prompt", "今天的用量");
+  await page.click("#sendBtn");
+  await page.waitForFunction(() => {
+    const text = document.querySelector("#log") ? document.querySelector("#log").innerText : "";
+    return text.includes("1,150") || text.includes("1150");
+  });
+  const ledgerAnswer = await page.$eval("#log", (el) => el.innerText);
+  assert.match(ledgerAnswer, /今天的用量/);
+  assert.match(ledgerAnswer, /1,150|1150/);
+  assert.match(ledgerAnswer, /deepseek-flash|输入/);
+  assert.equal(ledgerAnswer.includes("9,999") || ledgerAnswer.includes("9999"), false);
+  assert.equal(chatBodies.length, chatsBefore);
+  assert.ok(ledgerCalls >= 1, "澄账没有请求 /api/log/token");
+  async function assertComposerVisible(label) {
+    const box = await page.evaluate(() => {
+      const send = document.querySelector("#sendBtn");
+      const prompt = document.querySelector("#prompt");
+      const sendBox = send.getBoundingClientRect();
+      const promptBox = prompt.getBoundingClientRect();
+      return {
+        sendBottom: sendBox.bottom,
+        sendRight: sendBox.right,
+        promptBottom: promptBox.bottom,
+        height: window.innerHeight,
+        width: window.innerWidth,
+        hidden: send.hidden || prompt.hidden
+      };
+    });
+    assert.equal(box.hidden, false, label + " composer hidden");
+    assert.ok(box.sendBottom <= box.height + 1, label + " send clipped " + JSON.stringify(box));
+    assert.ok(box.promptBottom <= box.height + 1, label + " prompt clipped " + JSON.stringify(box));
+    assert.ok(box.sendRight <= box.width + 1, label + " send off to the right " + JSON.stringify(box));
+  }
+  await assertComposerVisible("1440x900");
+  await page.screenshot({ path: path.join(OUT, "portal-ledger-qa-dark.png") });
+  await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1 });
+  await assertComposerVisible("1280x800");
+  await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
+  await page.click("#themeBtn");
+  await page.waitForFunction(() => document.documentElement.getAttribute("data-theme") === "light");
+  await page.click('#nav button[data-tab="agents"]');
+  await page.waitForSelector("#ledgerEntry .agent-ledger");
+  await page.screenshot({ path: path.join(OUT, "portal-ledger-entry.png") });
+  await page.click("#ledgerEntry .agent-ledger");
+  await page.waitForFunction(() => document.querySelector("#chatHeading").textContent === "澄账");
+  await page.screenshot({ path: path.join(OUT, "portal-ledger-qa.png") });
 
   assert.equal(authSeen, true);
   assert.deepEqual(external, []);

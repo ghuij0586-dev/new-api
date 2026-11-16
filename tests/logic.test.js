@@ -116,6 +116,54 @@ test("sse parser keeps split chunks and stops on DONE", function () {
   assert.equal(logic.sseDelta('{"error":{"message":"sk-testEXAMPLE12345678 leaked"}}').error.includes("EXAMPLE"), false);
 });
 
+test("澄账 classifies usage questions and refuses to invent numbers", function () {
+  const L = logic;
+  assert.equal(L.classifyLedgerQuestion("我用了多少 token？").intent, "tokens");
+  assert.equal(L.classifyLedgerQuestion("这个月花了多少钱？").intent, "money");
+  assert.equal(L.classifyLedgerQuestion("这个月花了多少钱？").range, "month");
+  assert.equal(L.classifyLedgerQuestion("还剩多少额度？").intent, "remaining");
+  assert.equal(L.classifyLedgerQuestion("各模型用了多少？").intent, "byModel");
+  assert.equal(L.classifyLedgerQuestion("今天的用量").intent, "today");
+  const help = L.answerLedger("你好", {}, new Date("2026-11-16T08:00:00+08:00"));
+  assert.equal(help.error, false);
+  assert.match(help.text, /澄账只查询/);
+  assert.equal(/\d{3,}/.test(help.text), false);
+  const remain = L.answerLedger("还剩多少额度？", {
+    quota: { name: "周叶", total_granted: 1000000, total_used: 12345, total_available: 987655, unlimited_quota: false }
+  });
+  assert.match(remain.text, /987,655|987655/);
+  assert.match(remain.text, /周叶/);
+  const now = new Date(2026, 10, 16, 15, 0, 0);
+  const byModel = L.answerLedger("各模型用了多少？", {
+    logs: [
+      { model_name: "deepseek-flash", prompt_tokens: 100, completion_tokens: 20, quota: 500000, created_at: Math.floor(now.getTime() / 1000), type: 2 },
+      { model_name: "deepseek-flash", prompt_tokens: 50, completion_tokens: 10, quota: 250000, created_at: Math.floor(now.getTime() / 1000) - 86400, type: 2 }
+    ]
+  }, now);
+  assert.match(byModel.text, /deepseek-flash/);
+  assert.match(byModel.text, /180/);
+  const today = L.answerLedger("今天的用量", {
+    logs: [
+      { model_name: "deepseek-flash", prompt_tokens: 100, completion_tokens: 20, quota: 500000, created_at: Math.floor(now.getTime() / 1000), type: 2 },
+      { model_name: "old", prompt_tokens: 999, completion_tokens: 1, quota: 1, created_at: Math.floor(now.getTime() / 1000) - 3 * 86400, type: 2 }
+    ]
+  }, now);
+  assert.match(today.text, /120/);
+  assert.equal(today.text.includes("999"), false);
+  const money = L.answerLedger("这个月花了多少钱？", {
+    logs: [
+      { model_name: "deepseek-flash", prompt_tokens: 10, completion_tokens: 0, quota: 250000, created_at: Math.floor(now.getTime() / 1000), type: 2 },
+      { model_name: "充值", prompt_tokens: 0, completion_tokens: 0, quota: 5000000, created_at: Math.floor(now.getTime() / 1000), type: 1 }
+    ]
+  }, now);
+  assert.match(money.text, /0\.50 美元/);
+  assert.equal(money.text.includes("5,000,000") || money.text.includes("5000000"), false);
+  const failed = L.answerLedger("各模型用了多少？", { logError: { title: "调用记录接口返回 404。", detail: "" } });
+  assert.equal(failed.error, true);
+  assert.match(failed.text, /404/);
+  assert.equal(failed.text.includes("180"), false);
+});
+
 test("admin url follows the page host and keeps the known server as fallback", function () {
   assert.equal(logic.defaultAdminUrl({ protocol: "http:", hostname: "43.110.30.115" }), "http://43.110.30.115:3000");
   assert.equal(logic.defaultAdminUrl({ protocol: "file:", hostname: "" }), "http://43.110.30.115:3000");

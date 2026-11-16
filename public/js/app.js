@@ -16,6 +16,13 @@
     { key: "image", mode: "image", icon: "orange", pill: "额度控制", pillClass: "soon", title: "文生图助手", desc: "按描述出示意图、配图和海报草稿。", tags: ["生图"], samples: ["一只在茶馆里看书的橘猫，暖色灯光，国风插画", "浅色背景的产品架构示意图，扁平插画，留白充足"], system: "" },
     { key: "audio", mode: "audio", icon: "green", pill: "", title: "语音转写助手", desc: "把讨论录音转成文字。结果来自网关，不会在本地编造。", tags: ["语音"], samples: [], system: "" }
   ];
+  var LEDGER = {
+    key: "ledger",
+    mode: "ledger",
+    title: "澄账",
+    desc: "查询这把令牌的用量和使用金额。",
+    samples: ["我用了多少 token？", "这个月花了多少钱？", "还剩多少额度？", "各模型用了多少？", "今天的用量"]
+  };
   var ADMIN_AGENTS = [
     { key: "inspect", admin: true, tab: "channels", icon: "slate", pill: "管理员", pillClass: "admin", title: "渠道巡检助手", desc: "查看这把令牌能调用哪些模型。不能修改渠道，也不能看到厂商密钥。", tags: ["运维"] },
     { key: "usage", admin: true, tab: "quota", icon: "slate", pill: "管理员", pillClass: "admin", title: "用量解读助手", desc: "用白话说明这把令牌用了多少额度。不会列出其他同事。", tags: ["成本"] }
@@ -54,7 +61,15 @@
   function storeRemove(key) { try { localStorage.removeItem(key); } catch (e) {} }
 
   function currentAgent() {
+    if (state.agentKey === "ledger") return LEDGER;
     return AGENTS.filter(function (agent) { return agent.key === state.agentKey; })[0] || AGENTS[1];
+  }
+  function ledgerAvatar() {
+    var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 64 64");
+    svg.setAttribute("aria-hidden", "true");
+    svg.innerHTML = '<circle cx="32" cy="32" r="30.25" fill="none" stroke="currentColor" stroke-width="1.25"/><circle cx="32" cy="26" r="8.5" fill="none" stroke="currentColor" stroke-width="1.25"/><path d="M28.2 25.2h2.4M33.4 25.2h2.4" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/><path d="M29.2 29.2c1.6 1.3 4 1.3 5.6 0" fill="none" stroke="currentColor" stroke-width="1.15" stroke-linecap="round"/><path d="M18 49.5c2.4-8.2 25.2-8.2 28 0" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/><path class="ledger-seal" d="M47.2 40.6l1.05 2.7 2.85.95-2.85.95-1.05 2.7-1.05-2.7-2.85-.95 2.85-.95z"/>';
+    return svg;
   }
   function currentModel() {
     for (var i = 0; i < state.models.length; i++) {
@@ -245,8 +260,27 @@
     return button;
   }
 
+  function renderLedgerCard() {
+    var button = document.createElement("button");
+    button.type = "button";
+    button.className = "agent agent-ledger";
+    button.dataset.agent = "ledger";
+    var face = document.createElement("span");
+    face.className = "ledger-avatar";
+    face.append(ledgerAvatar());
+    var body = document.createElement("span");
+    body.className = "ledger-copy";
+    var title = document.createElement("h3");
+    title.textContent = LEDGER.title;
+    var desc = document.createElement("p");
+    desc.textContent = LEDGER.desc;
+    body.append(title, desc);
+    button.append(face, body);
+    return button;
+  }
   function renderAgents() {
     $("homeAgents").replaceChildren.apply($("homeAgents"), AGENTS.slice(0, 3).map(renderAgentCard));
+    $("ledgerEntry").replaceChildren(renderLedgerCard());
     $("teamAgents").replaceChildren.apply($("teamAgents"), AGENTS.map(renderAgentCard));
     $("adminAgents").replaceChildren.apply($("adminAgents"), ADMIN_AGENTS.map(renderAgentCard));
   }
@@ -295,8 +329,19 @@
   function renderComposer() {
     var agent = currentAgent();
     var model = currentModel();
+    var ledger = agent.mode === "ledger";
+    $("content").classList.toggle("ledger-mode", ledger);
+    if ($("chatHeading")) {
+      $("chatHeading").textContent = ledger ? "澄账" : "对话";
+      $("chatLead").textContent = ledger
+        ? "问这把令牌用了多少 token、花了多少钱、还剩多少额度。数字来自网关，失败时显示真实原因。"
+        : "发送后会真实调用网关。失败时直接显示原因，不会用本地文字冒充模型回复。";
+    }
+    $("prompt").placeholder = ledger
+      ? "问用量或金额，例如：这个月花了多少钱？"
+      : "输入要发送的内容，Enter 换行，Ctrl + Enter 发送";
     $("playKicker").textContent = agent.title;
-    $("playTitle").textContent = model ? model.displayName : "未选择模型";
+    $("playTitle").textContent = agent.mode === "ledger" ? "澄账" : (model ? model.displayName : "未选择模型");
     $("playHint").textContent = agent.desc;
     var chips = $("chips");
     chips.replaceChildren();
@@ -331,7 +376,8 @@
       note.textContent = "这是向量模型，不能用来对话。请换一个对话或识图模型。";
     }
     var endpoint = agent.mode === "image" ? "/v1/images/generations" : (agent.mode === "audio" ? "/v1/audio/transcriptions" : "真实调用");
-    $("modelMeta").textContent = model ? ((model.displayName === model.id ? model.id : model.id) + " · " + endpoint) : "未选择模型";
+    if (agent.mode === "ledger") $("modelMeta").textContent = "只查这把令牌，不调用对话模型";
+    else $("modelMeta").textContent = model ? ((model.displayName === model.id ? model.id : model.id) + " · " + endpoint) : "未选择模型";
     $("sendBtn").textContent = agent.mode === "image" ? "生成" : (agent.mode === "audio" ? "转写" : "发送");
     $("sendBtn").hidden = state.sending;
     $("stopBtn").hidden = !state.sending;
@@ -637,7 +683,9 @@
     icon.innerHTML = ICONS.chat;
     var text = document.createElement("div");
     var mode = currentAgent().mode;
-    text.textContent = mode === "vision"
+    text.textContent = mode === "ledger"
+      ? "问这把令牌用了多少、花了多少、还剩多少。数字只来自网关返回的记录。"
+      : mode === "vision"
       ? "上传或粘贴一张图片，再写下问题。图片会发给网关里的视觉模型。"
       : mode === "image"
         ? "描述想要的画面，然后生成。如果模型还没接入，这里会显示网关返回的原因。"
@@ -784,7 +832,7 @@
     document.querySelectorAll("#nav button").forEach(function (button) {
       button.classList.toggle("active", button.dataset.tab === id);
     });
-    $("crumb").textContent = TABS[id];
+    $("crumb").textContent = (id === "chat" && state.agentKey === "ledger") ? "澄账" : TABS[id];
     $("content").classList.toggle("chat-mode", id === "chat");
     if ((!fromHash || requested !== id) && location.hash !== "#" + id) {
       ignoreHash = true;
@@ -793,6 +841,15 @@
   }
 
   function openAgent(key) {
+    if (key === "ledger") {
+      if (state.agentKey !== "ledger") {
+        state.agentKey = "ledger";
+        resetChat();
+      }
+      renderComposer();
+      showTab("chat");
+      return;
+    }
     var admin = ADMIN_AGENTS.filter(function (agent) { return agent.key === key; })[0];
     if (admin) {
       if (!state.admin) return;
@@ -1101,12 +1158,62 @@
     updateMessage(bot, { text: text, pending: false });
   }
 
+  async function readJsonSafe(res) {
+    try { return await res.json(); } catch (e) { return null; }
+  }
+  async function loadLedgerSources() {
+    var quota = null;
+    var quotaError = null;
+    var quotaRes = await apiFetch("/api/usage/token/", { timeout: 20000 });
+    if (quotaRes.status === 404 || quotaRes.status === 405) quotaRes = await apiFetch("/api/usage/token", { timeout: 20000 });
+    if (!quotaRes.ok) quotaError = await readExplained(quotaRes, "ledger");
+    else quota = L.parseUsagePayload(await readJsonSafe(quotaRes));
+    var logs = null;
+    var logError = null;
+    var logRes = await apiFetch("/api/log/token", { timeout: 20000 });
+    if (!logRes.ok) logError = await readExplained(logRes, "ledger");
+    else {
+      var body = await readJsonSafe(logRes);
+      if (body && body.success === false) logError = { title: body.message || "调用记录没有返回。", detail: "" };
+      else if (body && Array.isArray(body.data)) logs = body.data;
+      else if (Array.isArray(body)) logs = body;
+      else logError = { title: "调用记录的格式无法识别。", detail: "" };
+    }
+    return { quota: quota, quotaError: quotaError, logs: logs, logError: logError };
+  }
+  async function sendLedger(text) {
+    pushMessage({ role: "user", who: "你", text: text, apiText: text });
+    var bot = pushMessage({ role: "bot", who: "澄账", text: "", pending: true });
+    var data = await loadLedgerSources();
+    var answer = L.answerLedger(text, data, new Date());
+    updateMessage(bot, { text: answer.text, error: !!answer.error, pending: false, who: "澄账" });
+  }
   async function send() {
     if (state.sending) return;
     setComposerError("");
     var agent = currentAgent();
     var model = currentModel();
     if (!state.token) { setComposerError("请先登录。"); return; }
+    if (agent.mode === "ledger") {
+      var ledgerText = $("prompt").value.trim();
+      if (!ledgerText) { setComposerError("请输入要问的用量问题。"); return; }
+      state.sending = true;
+      renderComposer();
+      $("prompt").value = "";
+      try { await sendLedger(ledgerText); }
+      catch (err) {
+        var pendingLedger = state.messages[state.messages.length - 1];
+        if (pendingLedger && pendingLedger.pending) {
+          updateMessage(pendingLedger, { text: joinExplain(explainThrown(err)), error: true, pending: false, who: "澄账" });
+        } else setComposerError(joinExplain(explainThrown(err)));
+      } finally {
+        state.sending = false;
+        state.abort = null;
+        renderComposer();
+        $("prompt").focus();
+      }
+      return;
+    }
     if (!model) { setComposerError("请先选择一个模型。"); return; }
     if (agent.mode !== "image" && agent.mode !== "audio" && model.kinds.indexOf("embedding") !== -1) {
       setComposerError("这是向量模型，不能用来对话。");
@@ -1314,6 +1421,7 @@
       if (agent) openAgent(agent.dataset.agent);
     });
     $("userBtn").onclick = openSettings;
+    $("ledgerFab").onclick = function () { openAgent("ledger"); };
     $("closeSettings").onclick = function () { $("settings").close(); };
     $("settingsForm").addEventListener("submit", saveSettings);
     $("logoutBtn").onclick = function () { $("settings").close(); forceLogout(""); };

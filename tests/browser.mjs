@@ -1,109 +1,36 @@
 import { createRequire } from "node:module";
-import http from "node:http";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import assert from "node:assert/strict";
+import { createApp } from "../server/app.js";
+import { startMockNewApi } from "./mock-new-api.mjs";
 
 const require = createRequire(process.env.PUPPETEER_ROOT || "/tmp/gw-test/package.json");
 const puppeteer = require("puppeteer-core");
 
-const TOKEN = "sk-testEXAMPLE12345678";
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../public");
 const OUT = "/opt/cursor/artifacts";
-const TINY_PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+const SECRET = "browser-test-secret";
 
-function models() {
-  return {
-    object: "list",
-    data: [
-      { id: "qwen-plus", object: "model", owned_by: "alibaba" },
-      { id: "qwen-vl-plus", object: "model", owned_by: "alibaba" },
-      { id: "wanx2.1-t2i-turbo", object: "model", owned_by: "alibaba" }
-    ]
-  };
-}
-
-const usage = {
-  code: true,
-  message: "ok",
-  data: {
-    object: "token_usage",
-    name: "同事-01",
-    total_granted: 1000000,
-    total_used: 380000,
-    total_available: 620000,
-    unlimited_quota: false,
-    model_limits_enabled: false,
-    expires_at: 0
-  }
-};
-
-function startServer() {
-  const types = {
-    ".html": "text/html; charset=utf-8",
-    ".css": "text/css; charset=utf-8",
-    ".js": "text/javascript; charset=utf-8",
-    ".svg": "image/svg+xml",
-    ".woff2": "font/woff2",
-    ".txt": "text/plain"
-  };
-  const server = http.createServer((req, res) => {
-    const url = new URL(req.url, "http://127.0.0.1");
-    const rel = decodeURIComponent(url.pathname);
-    let file = path.normalize(path.join(ROOT, rel));
-    if (rel.endsWith("/")) file = path.join(ROOT, "index.html");
-    if (!file.startsWith(ROOT)) {
-      res.writeHead(403);
-      res.end();
-      return;
-    }
-    fs.readFile(file, (err, data) => {
-      if (err) {
-        res.writeHead(404);
-        res.end("not found");
-        return;
-      }
-      res.writeHead(200, { "content-type": types[path.extname(file)] || "application/octet-stream" });
-      res.end(data);
-    });
-  });
-  return new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve(server)));
-}
-
-function respond(req, status, body, contentType, extra) {
-  return req.respond({
-    status,
-    contentType,
-    headers: Object.assign({ "cache-control": "no-store", "x-new-api-version": "v1.0.0-rc.50" }, extra || {}),
-    body: typeof body === "string" ? body : JSON.stringify(body)
+function listen(server) {
+  return new Promise((resolve) => {
+    server.listen(0, "127.0.0.1", () => resolve("http://127.0.0.1:" + server.address().port));
   });
 }
 
 async function main() {
   fs.mkdirSync(OUT, { recursive: true });
-  const server = await startServer();
-  const origin = `http://127.0.0.1:${server.address().port}`;
-  const external = [];
+  const mock = await startMockNewApi();
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rg-browser-"));
+  const app = createApp({
+    dataDir: dir,
+    sessionSecret: SECRET,
+    newApiBase: mock.base,
+    staticDir: path.resolve("public")
+  });
+  const origin = await listen(app);
   const pageErrors = [];
-  let chatMode = "hello";
-  let ledgerCalls = 0;
-  function ledgerLogs() {
-    const now = Math.floor(Date.now() / 1000);
-    return {
-      success: true,
-      message: "",
-      data: [
-        { model_name: "deepseek-flash", prompt_tokens: 800, completion_tokens: 200, quota: 250000, created_at: now - 3600, type: 2 },
-        { model_name: "kimi-k2", prompt_tokens: 100, completion_tokens: 50, quota: 100000, created_at: now - 7200, type: 2 },
-        { model_name: "old-model", prompt_tokens: 9999, completion_tokens: 1, quota: 999999, created_at: now - 40 * 86400, type: 2 },
-        { model_name: "充值", prompt_tokens: 0, completion_tokens: 0, quota: 5000000, created_at: now, type: 1 }
-      ]
-    };
-  }
-  let imageMode = "ok";
-  let audioCalls = 0;
-  let chatBodies = [];
-  let authSeen = false;
+  const leaked = [];
 
   const browser = await puppeteer.launch({
     executablePath: process.env.CHROME_PATH || "/usr/local/bin/google-chrome",
@@ -111,254 +38,109 @@ async function main() {
     args: ["--no-sandbox", "--disable-dev-shm-usage", "--lang=zh-CN"]
   });
   const page = await browser.newPage();
-  await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
+  await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1 });
   page.on("pageerror", (err) => pageErrors.push(String(err)));
   page.on("console", (msg) => {
     if (msg.type() === "error") pageErrors.push(msg.text());
   });
-  await page.setRequestInterception(true);
   page.on("request", (req) => {
     const url = req.url();
-    if (url.includes("43.110.30.115")) {
-      external.push(url);
-      req.abort();
-      return;
+    const body = req.postData() || "";
+    const auth = req.headers().authorization || "";
+    if (url.includes("sk-") || body.includes("sk-") || auth.toLowerCase().startsWith("bearer ")) {
+      leaked.push(url + " " + auth + " " + body.slice(0, 120));
     }
-    if (req.headers().authorization && req.headers().authorization.startsWith("Bearer ")) authSeen = true;
-    if (url.includes("/v1/models")) {
-      respond(req, 200, models());
-      return;
-    }
-    if (url.includes("/api/usage/token")) {
-      respond(req, 200, usage);
-      return;
-    }
-    if (url.includes("/api/log/token")) {
-      ledgerCalls += 1;
-      respond(req, 200, ledgerLogs());
-      return;
-    }
-    if (url.includes("/v1/chat/completions")) {
-      chatBodies.push(req.postData() || "");
-      if (chatMode === "xss") {
-        const payload = 'data: {"choices":[{"delta":{"content":"<img src=x onerror=\\"window.__xss=1\\">"}}]}\n\ndata: [DONE]\n';
-        respond(req, 200, payload, "text/event-stream; charset=utf-8");
-        return;
-      }
-      respond(req, 200, 'data: {"choices":[{"delta":{"content":"你好，同事"}}]}\n\ndata: [DONE]\n', "text/event-stream; charset=utf-8");
-      return;
-    }
-    if (url.includes("/v1/images/generations")) {
-      if (imageMode === "missing") {
-        respond(req, 404, { error: { message: "无可用渠道 (request id: img404)" } });
-        return;
-      }
-      respond(req, 200, { data: [{ b64_json: TINY_PNG, mime_type: "image/png" }] });
-      return;
-    }
-    if (url.includes("/v1/audio/transcriptions")) {
-      audioCalls += 1;
-      respond(req, 200, { text: "今天下午对齐了门户" });
-      return;
-    }
-    if (url.startsWith(origin) || url.startsWith("data:") || url.startsWith("blob:")) {
-      req.continue().catch(() => {});
-      return;
-    }
-    external.push(url);
-    req.abort();
   });
 
-  const bad = await browser.newPage();
-  await bad.setRequestInterception(true);
-  bad.on("request", (req) => {
-    const url = req.url();
-    if (url.includes("/v1/models")) {
-      respond(req, 401, { error: { message: "Invalid token (request id: abc123)", type: "new_api_error" } });
-      return;
-    }
-    if (url.startsWith(origin)) req.continue();
-    else req.abort();
-  });
-  await bad.goto(origin + "/", { waitUntil: "networkidle0" });
-  await bad.type("#tokenInput", TOKEN);
-  await bad.click("#loginSubmit");
-  await bad.waitForFunction(() => {
-    const el = document.querySelector("#loginError");
-    return el && !el.hidden && el.textContent.includes("令牌无效");
-  });
-  const denied = await bad.$eval("#loginError", (el) => el.textContent);
-  assert.match(denied, /厂商|令牌/);
-  assert.equal(denied.includes(TOKEN), false);
-  await bad.close();
-
-  await page.goto(origin + "/", { waitUntil: "networkidle0" });
-  assert.match(await page.title(), /^融光$/);
-  assert.match(await page.$eval("h1", (el) => el.textContent), /^登录融光$/);
-  assert.equal(await page.$eval(".logo-full", (el) => el.alt), "融光");
-  assert.equal(await page.$eval(".brand .logo-mark", (el) => el.getAttribute("src")), "mark.svg");
-  assert.equal(await page.evaluate(() => document.querySelector(".wordmark, .brand-name")), null);
+  await page.goto(origin + "/", { waitUntil: "load", timeout: 20000 });
   await page.evaluate(() => document.fonts.ready);
+  assert.match(await page.$eval("h1", (el) => el.textContent), /^登录融光$/);
+  assert.match(await page.$eval(".inscription-note", (el) => el.textContent), /用账号进入工作台/);
+  assert.equal(await page.$eval("#loginSubmit", (el) => el.textContent), "进入融光");
+  assert.match(await page.$eval("#privacyLogin", (el) => el.textContent), /对话记录默认只保存在这台浏览器/);
+  assert.equal(await page.$("#tokenInput"), null);
   assert.equal(await page.evaluate(() => document.fonts.check('48px "Rongguang Brush"')), true);
   const brush = await page.evaluate(() => getComputedStyle(document.querySelector(".login-card h1")).fontFamily);
   assert.match(brush, /Rongguang Brush/);
-  assert.equal((await page.evaluate(() => document.body.innerText)).includes("多模态聚合网关"), false);
-  assert.equal((await page.evaluate(() => document.body.innerText)).includes("内部工作台"), false);
-  assert.equal((await page.evaluate(() => document.body.innerText)).includes("内部同事使用"), false);
-  await page.screenshot({ path: path.join(OUT, "portal-login.png") });
-  await page.type("#nameInput", "小王");
-  await page.type("#tokenInput", TOKEN);
-  await page.click("#loginSubmit");
-  await page.waitForSelector("#panel-home.active h1");
-  await page.waitForFunction(() => document.body.innerText.includes("38%"));
-  const homeText = await page.evaluate(() => document.body.innerText);
-  assert.match(homeText, /工作台/);
-  assert.match(homeText, /已连接 · 3 个模型/);
-  assert.match(homeText, /看图问答助手/);
-  assert.match(homeText, /融光是同事使用的入口/);
-  assert.match(homeText, /不是 New API 官方管理后台/);
-  assert.equal(homeText.includes("多模态聚合网关"), false);
-  assert.equal(homeText.includes("内部工作台"), false);
-  assert.equal(homeText.includes("内部同事使用"), false);
-  assert.equal(homeText.includes("用户 04"), false);
-  assert.equal(homeText.includes("模拟"), false);
-  assert.equal(homeText.includes(TOKEN), false);
-  await page.screenshot({ path: path.join(OUT, "portal-home.png") });
-
-  await page.click('#nav button[data-tab="agents"]');
-  await page.waitForSelector("#panel-agents.active");
-  const agentsText = await page.$eval("#panel-agents", (el) => el.innerText);
-  assert.match(agentsText, /面向同事/);
-  assert.match(agentsText, /文生图助手/);
-  assert.equal(agentsText.includes("渠道巡检"), false);
-  await page.screenshot({ path: path.join(OUT, "portal-agents.png") });
-
-  await page.evaluate(() => document.querySelector('#panel-agents [data-agent="qa"]').click());
-  await page.waitForSelector("#panel-chat.active");
-  await page.click('#chips button');
-  await page.click("#sendBtn");
-  await page.waitForFunction(() => document.body.innerText.includes("你好，同事"));
-  assert.equal(chatBodies.length > 0, true);
-  assert.match(chatBodies[0], /qwen-turbo|qwen-plus/);
-  const chatHtml = await page.$eval("#log", (el) => el.innerHTML);
-  assert.equal(chatHtml.includes("<img"), false);
-  await page.screenshot({ path: path.join(OUT, "portal-chat.png") });
-
-  chatMode = "xss";
-  await page.type("#prompt", "再答一次");
-  await page.click("#sendBtn");
-  await page.waitForFunction(() => document.body.innerText.includes("onerror"));
-  assert.equal(await page.evaluate(() => window.__xss), undefined);
-  assert.equal(await page.$eval("#log", (el) => el.querySelectorAll("img").length), 0);
-
-  await page.evaluate(() => document.querySelector('#panel-agents [data-agent="vision"]').click());
-  await page.waitForSelector("#attachRow:not([hidden])");
-  await page.click("#sampleImage");
-  await page.type("#prompt", "这张图里写了哪些文字？");
-  const before = chatBodies.length;
-  await page.click("#sendBtn");
-  for (let i = 0; i < 40 && chatBodies.length <= before; i += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-  const visionBody = chatBodies[before];
-  assert.match(visionBody, /image_url/);
-  assert.match(visionBody, /data:image\/png;base64,/);
-  assert.match(visionBody, /qwen-vl-plus/);
-
-  imageMode = "missing";
-  await page.evaluate(() => document.querySelector('#panel-agents [data-agent="image"]').click());
-  await page.waitForFunction(() => document.querySelector("#sendBtn").textContent === "生成");
-  await page.type("#prompt", "一只橘猫");
-  await page.click("#sendBtn");
-  await page.waitForFunction(() => document.body.innerText.includes("生图接口还没有配置好") || document.body.innerText.includes("没有找到这个模型"));
-  const imageErrorHtml = await page.$eval("#log", (el) => el.innerHTML);
-  assert.equal(imageErrorHtml.includes("<img"), false);
-  assert.equal((await page.evaluate(() => document.body.innerText)).includes("模拟出图"), false);
-
-  imageMode = "ok";
-  await page.click("#clearChat");
-  await page.type("#prompt", "浅色背景的架构图");
-  await page.click("#sendBtn");
-  await page.waitForSelector("#log .preview img");
-  const src = await page.$eval("#log .preview img", (img) => img.getAttribute("src"));
-  assert.match(src, /^data:image\/png;base64,/);
-  await page.screenshot({ path: path.join(OUT, "portal-image.png") });
-
-  await page.evaluate(() => document.querySelector('#panel-agents [data-agent="audio"]').click());
-  await page.waitForFunction(() => (document.querySelector("#modeNote") || {}).textContent.includes("尚未接入"));
-  const audioFile = path.join(OUT, "tiny.wav");
-  fs.writeFileSync(audioFile, Buffer.from("RIFF"));
-  const input = await page.$("#audioInput");
-  await input.uploadFile(audioFile);
-  await page.click("#sendBtn");
-  await page.waitForFunction(() => (document.querySelector("#composerError") || {}).textContent.includes("尚未接入"));
-  assert.equal(audioCalls, 0);
-  assert.equal((await page.evaluate(() => document.body.innerText)).includes("今天下午对齐了网关的接入范围"), false);
-
-  await page.click('#nav button[data-tab="quota"]');
-  await page.waitForSelector("#panel-quota.active");
-  const quotaText = await page.$eval("#panel-quota", (el) => el.innerText);
-  assert.match(quotaText, /38%/);
-  assert.match(quotaText, /同事-01/);
-  assert.equal(quotaText.includes("用户 04"), false);
-  assert.equal(quotaText.includes(TOKEN), false);
-  assert.match(quotaText, /sk-test\*\*\*\*/);
-  await page.screenshot({ path: path.join(OUT, "portal-quota.png") });
-
-  await page.click("#userBtn");
-  await page.waitForSelector("#settings[open]");
-  await page.click("#setAdmin");
-  await page.click("#saveSettings");
-  await page.waitForSelector("#navChannels:not([hidden])");
-  await page.click("#navChannels");
-  await page.waitForSelector("#panel-channels.active");
-  const channelText = await page.$eval("#panel-channels", (el) => el.innerText);
-  assert.match(channelText, /阿里云百炼/);
-  assert.match(channelText, /qwen-plus/);
-  assert.equal(channelText.includes("218 ms"), false);
-  assert.match(channelText, /令牌可调用/);
-  await page.screenshot({ path: path.join(OUT, "portal-channels.png") });
-
-  await page.evaluate(() => document.querySelector('#nav button[data-tab="home"]').click());
-  await page.waitForSelector("#panel-home.active");
-  await page.click("#themeBtn");
+  await page.screenshot({ path: path.join(OUT, "workstation-login.png") });
+  await page.click("#loginTheme");
   await page.waitForFunction(() => document.documentElement.getAttribute("data-theme") === "dark");
-  await page.screenshot({ path: path.join(OUT, "portal-dark.png") });
-  await page.reload({ waitUntil: "networkidle0" });
-  await page.waitForFunction(() => document.documentElement.getAttribute("data-theme") === "dark" && document.body.innerText.includes("工作台"));
+  await page.screenshot({ path: path.join(OUT, "workstation-login-dark.png") });
+  await page.click("#loginTheme");
+  await page.waitForFunction(() => document.documentElement.getAttribute("data-theme") === "light");
 
-  await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
-  await page.evaluate(() => document.querySelector('#nav button[data-tab="home"]').click());
-  await page.waitForSelector("#panel-home.active");
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-  assert.ok(overflow < 8, "mobile page overflows by " + overflow);
-  await page.screenshot({ path: path.join(OUT, "portal-mobile.png") });
-
-  await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
-  await page.click('#nav button[data-tab="agents"]');
-  await page.waitForSelector("#ledgerEntry .ledger-avatar");
-  const avatarSize = await page.$eval("#ledgerEntry .ledger-avatar", (el) => {
-    const box = el.getBoundingClientRect();
-    return { w: box.width, h: box.height };
+  await page.type("#usernameInput", "disabled");
+  await page.type("#passwordInput", "secret-pass");
+  await page.click("#loginSubmit");
+  await page.waitForFunction(() => {
+    const el = document.querySelector("#loginError");
+    return el && !el.hidden && el.textContent.includes("账号未启用");
   });
-  assert.ok(avatarSize.w >= 80 && avatarSize.h >= 80, "ledger avatar is too small");
-  await page.screenshot({ path: path.join(OUT, "portal-ledger-entry-dark.png") });
-  const chatsBefore = chatBodies.length;
-  await page.click("#ledgerFab");
-  await page.waitForFunction(() => document.querySelector("#chatHeading") && document.querySelector("#chatHeading").textContent === "澄账");
-  await page.type("#prompt", "今天的用量");
+  assert.equal(await page.$eval("#app", (el) => el.hidden), true);
+
+  await page.click("#usernameInput", { clickCount: 3 });
+  await page.type("#usernameInput", "xiaowang");
+  await page.click("#passwordInput", { clickCount: 3 });
+  await page.type("#passwordInput", "wrong-pass");
+  await page.click("#loginSubmit");
+  await page.waitForFunction(() => document.querySelector("#loginError").textContent.includes("用户名或密码不正确"));
+  assert.equal(await page.$eval("#login", (el) => el.hidden), false);
+
+  await page.click("#passwordInput", { clickCount: 3 });
+  await page.type("#passwordInput", "secret-pass");
+  await page.click("#loginSubmit");
+  await page.waitForFunction(() => document.body.innerText.includes("还没有项目"));
+  await page.screenshot({ path: path.join(OUT, "workstation-project-empty.png") });
+
+  await page.type("#projectNameInput", "西湖茶事");
+  await page.click("#createProjectBtn");
+  await page.waitForFunction(() => {
+    const ready = document.querySelector("#workbenchReady");
+    const err = document.querySelector("#projectError");
+    return (ready && !ready.hidden) || (err && !err.hidden && err.textContent);
+  });
+  const projectError = await page.$eval("#projectError", (el) => (el.hidden ? "" : el.textContent));
+  if (projectError) throw new Error(projectError);
+  assert.match(await page.evaluate(() => document.body.innerText), /当前项目：西湖茶事/);
+  await page.screenshot({ path: path.join(OUT, "workstation-home.png") });
+
+  await page.click('#homeAgents [data-agent="docs"]');
+  await page.waitForSelector("#panel-chat.active");
+  await page.waitForSelector("#docPanel:not([hidden])");
+  const docPath = path.join(OUT, "sample-note.txt");
+  fs.writeFileSync(docPath, "融光试运行的办公地址在杭州西湖。会议室在二楼。\n");
+  const docInput = await page.$("#docInput");
+  await docInput.uploadFile(docPath);
+  await page.waitForFunction(() => document.body.innerText.includes("制度") || document.body.innerText.includes("sample-note"));
+  await page.type("#prompt", "办公地址在哪里？");
   await page.click("#sendBtn");
   await page.waitForFunction(() => {
     const text = document.querySelector("#log") ? document.querySelector("#log").innerText : "";
-    return text.includes("1,150") || text.includes("1150");
+    return text.includes("杭州西湖") && text.includes("来源");
   });
-  const ledgerAnswer = await page.$eval("#log", (el) => el.innerText);
-  assert.match(ledgerAnswer, /今天的用量/);
-  assert.match(ledgerAnswer, /1,150|1150/);
-  assert.match(ledgerAnswer, /deepseek-flash|输入/);
-  assert.equal(ledgerAnswer.includes("9,999") || ledgerAnswer.includes("9999"), false);
-  assert.equal(chatBodies.length, chatsBefore);
-  assert.ok(ledgerCalls >= 1, "澄账没有请求 /api/log/token");
+  await page.screenshot({ path: path.join(OUT, "workstation-qa-citation.png") });
+  await page.click("#prompt", { clickCount: 3 });
+  await page.type("#prompt", "报销流程是什么？");
+  await page.click("#sendBtn");
+  await page.waitForFunction(() => document.querySelector("#log").innerText.includes("根据当前项目资料，我不知道"));
+
+  assert.match(await page.$eval("#privacyComposer", (el) => el.textContent), /只要向模型提问，内容仍会经过网关/);
+  await page.screenshot({ path: path.join(OUT, "workstation-privacy-chat.png") });
+
+  await page.click("#ledgerFab");
+  await page.waitForFunction(() => document.querySelector("#chatHeading").textContent === "澄账");
+  await page.type("#prompt", "还剩多少额度？");
+  await page.click("#sendBtn");
+  await page.waitForFunction(() => {
+    const text = document.querySelector("#log").innerText;
+    return text.includes("西湖茶事") && text.includes("620,000") && text.includes("缓存");
+  });
+  const ledgerText = await page.$eval("#log", (el) => el.innerText);
+  assert.match(ledgerText, /输入/);
+  assert.match(ledgerText, /输出/);
+  assert.equal(ledgerText.includes("sk-"), false);
+  await page.screenshot({ path: path.join(OUT, "workstation-ledger.png") });
+
   async function assertComposerVisible(label) {
     const box = await page.evaluate(() => {
       const send = document.querySelector("#sendBtn");
@@ -367,41 +149,76 @@ async function main() {
       const promptBox = prompt.getBoundingClientRect();
       return {
         sendBottom: sendBox.bottom,
-        sendRight: sendBox.right,
         promptBottom: promptBox.bottom,
         height: window.innerHeight,
-        width: window.innerWidth,
         hidden: send.hidden || prompt.hidden
       };
     });
-    assert.equal(box.hidden, false, label + " composer hidden");
-    assert.ok(box.sendBottom <= box.height + 1, label + " send clipped " + JSON.stringify(box));
-    assert.ok(box.promptBottom <= box.height + 1, label + " prompt clipped " + JSON.stringify(box));
-    assert.ok(box.sendRight <= box.width + 1, label + " send off to the right " + JSON.stringify(box));
+    assert.equal(box.hidden, false, label);
+    assert.ok(box.sendBottom <= box.height + 1, label + " " + JSON.stringify(box));
+    assert.ok(box.promptBottom <= box.height + 1, label + " " + JSON.stringify(box));
   }
-  await assertComposerVisible("1440x900");
-  await page.screenshot({ path: path.join(OUT, "portal-ledger-qa-dark.png") });
-  await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1 });
   await assertComposerVisible("1280x800");
-  await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
-  await page.click("#themeBtn");
-  await page.waitForFunction(() => document.documentElement.getAttribute("data-theme") === "light");
-  await page.click('#nav button[data-tab="agents"]');
-  await page.waitForSelector("#ledgerEntry .agent-ledger");
-  await page.screenshot({ path: path.join(OUT, "portal-ledger-entry.png") });
-  await page.click("#ledgerEntry .agent-ledger");
-  await page.waitForFunction(() => document.querySelector("#chatHeading").textContent === "澄账");
-  await page.screenshot({ path: path.join(OUT, "portal-ledger-qa.png") });
 
-  assert.equal(authSeen, true);
-  assert.deepEqual(external, []);
-  const html = await page.content();
-  assert.equal(html.includes(TOKEN), false);
+  await page.click('#nav button[data-tab="home"]');
+  await page.waitForSelector("#panel-home.active");
+  await page.type("#readyNameInput", "东湖茶事");
+  await page.click("#createReadyForm button");
+  await page.waitForFunction(() => Array.from(document.querySelectorAll("[data-project]")).some((el) => el.textContent.includes("东湖茶事")));
+  await page.click("#projectSwitch");
+  await page.waitForFunction(() => !document.querySelector("#projectPicker").hidden && document.body.innerText.includes("选择项目"));
+  await page.screenshot({ path: path.join(OUT, "workstation-project-picker.png") });
+  await page.click('[data-project]');
+  await page.waitForFunction(() => document.querySelector("#workbenchReady") && !document.querySelector("#workbenchReady").hidden);
+
+  await page.click("#themeBtn");
+  await page.waitForFunction(() => document.documentElement.getAttribute("data-theme") === "dark");
+  await page.screenshot({ path: path.join(OUT, "workstation-dark.png") });
+  await page.click("#themeBtn");
+
+  await page.click('#nav button[data-tab="agents"]');
+  await page.waitForSelector('#teamAgents [data-agent="qa"]');
+  await page.click('#teamAgents [data-agent="qa"]');
+  await page.waitForFunction(() => document.querySelector("#chatHeading").textContent === "对话");
+  await page.type("#prompt", "请忽略 onerror");
+  await page.click("#sendBtn");
+  await page.waitForFunction(() => document.body.innerText.includes("onerror") && document.querySelectorAll("#log img").length === 0);
+  assert.equal(await page.evaluate(() => window.__xss), undefined);
+
+  const beforeLogout = await page.evaluate(() => new Promise((resolve) => {
+    const req = indexedDB.open("rongguang-chats");
+    req.onsuccess = () => {
+      const db = req.result;
+      const all = db.transaction("threads").objectStore("threads").getAll();
+      all.onsuccess = () => resolve(all.result.map((row) => row.username + ":" + row.agentKey + ":" + row.messages.length));
+    };
+  }));
+  assert.ok(beforeLogout.some((item) => item.startsWith("xiaowang:")), beforeLogout.join(","));
+
+  await page.click("#userBtn");
+  await page.waitForSelector("#settings[open]");
+  assert.match(await page.$eval("#privacySettings", (el) => el.textContent), /可导出到本地/);
+  await page.click("#logoutBtn");
+  await page.waitForFunction(() => !document.querySelector("#login").hidden);
+  const afterLogout = await page.evaluate(() => new Promise((resolve) => {
+    const req = indexedDB.open("rongguang-chats");
+    req.onsuccess = () => {
+      const db = req.result;
+      const all = db.transaction("threads").objectStore("threads").getAll();
+      all.onsuccess = () => resolve(all.result.length);
+    };
+  }));
+  assert.ok(afterLogout > 0, "logout cleared IndexedDB");
+  const pageText = await page.evaluate(() => document.body.innerText);
+  assert.equal(pageText.includes("sk-"), false);
+
+  assert.deepEqual(leaked, []);
   const serious = pageErrors.filter((item) => !/favicon|Failed to load resource/i.test(item));
   assert.deepEqual(serious, [], serious.join("\n"));
 
   await browser.close();
-  server.close();
+  app.close();
+  mock.server.close();
   console.log("browser checks passed");
 }
 

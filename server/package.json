@@ -1,0 +1,6 @@
+{
+  "name": "rongguang-bff",
+  "private": true,
+  "type": "module",
+  "description": "融光办公工作站的薄后端。浏览器只拿会话，项目钥匙留在服务器。"
+}

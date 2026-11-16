@@ -366,7 +366,7 @@
       bits.push("融光不会展示假图片。请管理员确认该模型已接入，并且开放了图像生成。");
     }
     if (status === 401) {
-      bits.push("请使用 New API 管理后台「令牌」页签发的网关令牌，不要填写厂商控制台的密钥。");
+      bits.push("当前项目暂时调不了模型。页面不会显示钥匙，请让管理员检查这个账号是否仍可调用。");
     }
     if (status === 502 || status === 503 || status === 504) {
       bits.push("请确认原来的 new-api 容器仍在运行，并且没有被这次部署停掉。");
@@ -430,7 +430,7 @@
 
   function quotaSummary(usage) {
     if (!usage || typeof usage !== "object") {
-      return { known: false, advice: "暂时没有读到额度。请管理员在 New API 后台查看这把令牌。" };
+      return { known: false, advice: "暂时没有读到额度。请管理员在 New API 后台查看这个项目。" };
     }
     var used = Number(usage.total_used);
     var granted = Number(usage.total_granted);
@@ -442,7 +442,7 @@
     var percent = null;
     if (!unlimited && granted > 0) percent = Math.max(0, Math.min(100, Math.round((used / granted) * 100)));
     var advice;
-    if (unlimited) advice = "这把令牌不限额。如果十几位同事共用一把，建议改成每人一把并设置上限。";
+    if (unlimited) advice = "当前项目不限额。如果很多人共用，建议在管理后台分开设置上限。";
     else if (percent == null) advice = "网关返回了用量，但没有总额，无法计算百分比。";
     else if (percent >= 80) advice = "额度已用过八成。请尽快让管理员追加，避免同事调用到一半被拒绝。";
     else if (percent >= 50) advice = "额度已用过半。生图通常更贵，建议单独给生图设上限。";
@@ -496,8 +496,37 @@
     return { intent: "help", range: "all" };
   }
 
-  function ledgerHelpText() {
-    return "澄账只查询你这把令牌的用量和金额。可以问：我用了多少 token、这个月花了多少钱、还剩多少额度、各模型用了多少、今天的用量。";
+  function ledgerHelpText(projectName) {
+    var name = String(projectName || "").replace(/sk-[A-Za-z0-9_-]{2,}/g, "").trim();
+    var who = name ? "项目「" + name + "」" : "当前项目";
+    return "澄账只查询" + who + "的用量和金额，不调用对话模型。可以问：用了多少 token、这个月花了多少钱、还剩多少额度、各模型用了多少、今天的用量。回答会分开说明剩余额度、已用额度，以及输入、输出和缓存 token。";
+  }
+
+  var CACHE_FIELDS = ["cache_tokens", "prompt_cache_hit_tokens", "cached_tokens", "prompt_cache_tokens", "cache_read_tokens"];
+
+  function readCache(item) {
+    var found = "";
+    var value = 0;
+    function consider(obj, depth) {
+      if (!obj || typeof obj !== "object" || found || depth > 3) return;
+      for (var i = 0; i < CACHE_FIELDS.length; i++) {
+        var name = CACHE_FIELDS[i];
+        if (Object.prototype.hasOwnProperty.call(obj, name) && obj[name] != null && obj[name] !== "") {
+          var n = Number(obj[name]);
+          if (isFinite(n)) { found = name; value = n; return; }
+        }
+      }
+      if (typeof obj.other === "string" && obj.other) {
+        try { consider(JSON.parse(obj.other), depth + 1); } catch (e) {}
+      } else if (obj.other && typeof obj.other === "object") consider(obj.other, depth + 1);
+    }
+    consider(item || {}, 0);
+    return { found: !!found, value: value };
+  }
+
+  function projectPrefix(data) {
+    var name = String(data && data.projectName || "").replace(/sk-[A-Za-z0-9_-]{2,}/g, "").trim();
+    return name ? "项目「" + name + "」。" : "当前项目。";
   }
 
   function logTimeMs(log) {
@@ -553,17 +582,20 @@
       var prompt = Number(item.prompt_tokens || item.promptTokens || 0);
       var completion = Number(item.completion_tokens || item.completionTokens || 0);
       var quota = Number(item.quota || 0);
+      var cache = readCache(item);
       if (!isFinite(prompt)) prompt = 0;
       if (!isFinite(completion)) completion = 0;
       if (!isFinite(quota)) quota = 0;
       var type = Number(item.type);
       var tokens = prompt + completion;
       if (isFinite(type) && type !== 2) continue;
-      if (tokens <= 0 && quota <= 0) continue;
+      if (tokens <= 0 && quota <= 0 && !cache.found) continue;
       out.push({
         model: String(item.model_name || item.modelName || "未标明模型"),
         prompt: prompt,
         completion: completion,
+        cache: cache.value,
+        cacheKnown: cache.found,
         tokens: tokens,
         quota: quota,
         at: logTimeMs(item)
@@ -580,27 +612,48 @@
   function sumLedger(logs) {
     var prompt = 0;
     var completion = 0;
+    var cache = 0;
     var quota = 0;
+    var cacheKnown = logs.length > 0;
     var byModel = {};
     for (var i = 0; i < logs.length; i++) {
       var log = logs[i];
       prompt += log.prompt;
       completion += log.completion;
       quota += log.quota;
-      if (!byModel[log.model]) byModel[log.model] = { tokens: 0, prompt: 0, completion: 0, quota: 0, count: 0 };
+      if (log.cacheKnown) cache += log.cache;
+      else cacheKnown = false;
+      if (!byModel[log.model]) byModel[log.model] = { tokens: 0, prompt: 0, completion: 0, cache: 0, cacheKnown: true, quota: 0, count: 0 };
       byModel[log.model].tokens += log.tokens;
       byModel[log.model].prompt += log.prompt;
       byModel[log.model].completion += log.completion;
       byModel[log.model].quota += log.quota;
       byModel[log.model].count += 1;
+      if (log.cacheKnown) byModel[log.model].cache += log.cache;
+      else byModel[log.model].cacheKnown = false;
     }
-    return { count: logs.length, prompt: prompt, completion: completion, tokens: prompt + completion, quota: quota, byModel: byModel };
+    return { count: logs.length, prompt: prompt, completion: completion, cache: cache, cacheKnown: cacheKnown, tokens: prompt + completion, quota: quota, byModel: byModel };
+  }
+
+  function caveatLines(data, sum) {
+    var lines = [];
+    var cacheMissing = !!(sum && sum.count > 0 && !sum.cacheKnown);
+    if (cacheMissing) lines.push("缓存 token 没能从记录里单独列出来。");
+    var incomplete = !!(data && (data.truncated || (Array.isArray(data.logs) && data.logs.length >= 1000)));
+    if (incomplete || (data && data.logError) || cacheMissing) lines.push("这些数字可能偏少。");
+    return lines;
   }
 
   function explainLedgerFailure(error) {
     if (!error) return "";
     if (typeof error === "string") return error;
     return error.detail ? error.title + " " + error.detail : error.title;
+  }
+
+  function tokenBreakdown(sum) {
+    var line = "输入 " + formatCount(sum.prompt) + "，输出 " + formatCount(sum.completion);
+    if (sum.cacheKnown) line += "，缓存 " + formatCount(sum.cache);
+    return line + "。";
   }
 
   function answerLedger(question, data, now) {
@@ -611,47 +664,47 @@
     var logs = normalizeLedgerLogs(rawLogs);
     var bounds = rangeBounds(parsed.range, now || new Date());
     var ranged = parsed.range === "all" ? logs : filterLedgerLogs(logs, bounds);
-    var incomplete = rawLogs.length >= 1000;
+    var incomplete = rawLogs.length >= 1000 || !!(data && data.truncated);
     var lines = [];
-    if (parsed.intent === "help") return { text: ledgerHelpText(), error: false };
+    var prefix = projectPrefix(data);
+    if (parsed.intent === "help") return { text: ledgerHelpText(data && data.projectName), error: false };
 
-    if (parsed.intent === "usedQuota") {
+    if (parsed.intent === "usedQuota" || parsed.intent === "remaining") {
       if (!quotaSummaryText || !quotaSummaryText.known) {
-        return { text: explainLedgerFailure(data && data.quotaError) || "没有读到这把令牌的额度。", error: true };
+        return { text: prefix + "\n" + (explainLedgerFailure(data && data.quotaError) || "没有读到这个项目的额度。") + "\n这些数字可能偏少。", error: true };
       }
-      lines.push("这把令牌已用 " + formatCount(quotaSummaryText.used) + " 额度点。");
-      if (!quotaSummaryText.unlimited && quotaSummaryText.percent != null) {
-        lines.push("总额 " + formatCount(quotaSummaryText.granted) + "，已用 " + quotaSummaryText.percent + "%。");
-      }
-      lines.push("额度点不是 token 数。");
-      return { text: lines.join("\n"), error: false };
-    }
-
-    if (parsed.intent === "remaining") {
-      if (!quotaSummaryText || !quotaSummaryText.known) {
-        return { text: explainLedgerFailure(data && data.quotaError) || "没有读到这把令牌的额度。", error: true };
-      }
+      lines.push(prefix);
       if (quotaSummaryText.unlimited) {
-        lines.push("这把令牌" + (quotaSummaryText.name ? "「" + quotaSummaryText.name + "」" : "") + "不限额。");
-        lines.push("累计已用额度点 " + formatCount(quotaSummaryText.used) + "。");
+        lines.push("不限额。已用额度 " + formatCount(quotaSummaryText.used) + "。");
       } else {
-        lines.push("这把令牌" + (quotaSummaryText.name ? "「" + quotaSummaryText.name + "」" : "") + "剩余 " + formatCount(quotaSummaryText.available) + " 额度点。");
-        lines.push("总额 " + formatCount(quotaSummaryText.granted) + "，已用 " + formatCount(quotaSummaryText.used) + (quotaSummaryText.percent == null ? "。" : "（" + quotaSummaryText.percent + "%）。"));
-        lines.push("剩余额度大约 " + formatUsd(quotaSummaryText.available) + "。");
+        lines.push("剩余额度 " + formatCount(quotaSummaryText.available) + "，已用额度 " + formatCount(quotaSummaryText.used) + "。");
+        lines.push("总额 " + formatCount(quotaSummaryText.granted) + (quotaSummaryText.percent == null ? "。" : "，已用 " + quotaSummaryText.percent + "%。"));
+        lines.push("剩余大约 " + formatUsd(quotaSummaryText.available) + "。");
         lines.push(moneyNote());
+      }
+      if (rawLogs.length) {
+        var quotaSum = sumLedger(parsed.range === "all" ? logs : ranged);
+        lines.push("最近返回的调用记录，" + tokenBreakdown(quotaSum));
+        caveatLines(Object.assign({}, data, { truncated: incomplete }), quotaSum).forEach(function (line) { lines.push(line); });
       }
       return { text: lines.join("\n"), error: false };
     }
 
     if (data && data.logError && (parsed.intent === "tokens" || parsed.intent === "money" || parsed.intent === "byModel" || parsed.intent === "today")) {
       var fallback = explainLedgerFailure(data.logError);
+      var head = prefix + "\n调用记录没有读到，不能按日期或模型统计。\n" + fallback;
       if (parsed.intent === "tokens" && quotaSummaryText && quotaSummaryText.known) {
-        return { text: "调用记录没有读到，所以不能统计 token 条数。\n" + fallback + "\n当前已用额度点是 " + formatCount(quotaSummaryText.used) + "，这不是 token 数。", error: true };
+        head += "\n已用额度 " + formatCount(quotaSummaryText.used) + "，这不是 token 数。";
       }
-      return { text: "调用记录没有读到，不能按日期或模型统计。\n" + fallback, error: true };
+      return { text: head + "\n这些数字可能偏少。", error: true };
     }
 
     var sum = sumLedger(ranged);
+    lines.push(prefix);
+    if (quotaSummaryText && quotaSummaryText.known) {
+      if (quotaSummaryText.unlimited) lines.push("不限额。已用额度 " + formatCount(quotaSummaryText.used) + "。");
+      else lines.push("剩余额度 " + formatCount(quotaSummaryText.available) + "，已用额度 " + formatCount(quotaSummaryText.used) + "。");
+    }
     if (parsed.intent === "byModel") {
       var names = Object.keys(sum.byModel);
       if (!names.length) {
@@ -661,22 +714,68 @@
         names.sort(function (a, b) { return sum.byModel[b].tokens - sum.byModel[a].tokens; });
         names.forEach(function (name) {
           var row = sum.byModel[name];
-          lines.push(name + "：" + formatCount(row.tokens) + " token（输入 " + formatCount(row.prompt) + "，输出 " + formatCount(row.completion) + "），" + formatCount(row.quota) + " 额度点，约 " + formatUsd(row.quota) + "。");
+          var cacheText = row.cacheKnown ? "，缓存 " + formatCount(row.cache) : "";
+          lines.push(name + "：" + formatCount(row.tokens) + " token（输入 " + formatCount(row.prompt) + "，输出 " + formatCount(row.completion) + cacheText + "），" + formatCount(row.quota) + " 额度点，约 " + formatUsd(row.quota) + "。");
         });
         lines.push(moneyNote());
       }
     } else if (parsed.intent === "money") {
-      lines.push(bounds.label + "，这把令牌消耗 " + formatCount(sum.quota) + " 额度点，约 " + formatUsd(sum.quota) + "。");
+      lines.push(bounds.label + "，这个项目消耗 " + formatCount(sum.quota) + " 额度点，约 " + formatUsd(sum.quota) + "。");
       lines.push("共 " + formatCount(sum.count) + " 次调用。");
+      lines.push(tokenBreakdown(sum));
       lines.push(moneyNote());
     } else {
       lines.push(bounds.label + "，合计 " + formatCount(sum.tokens) + " token。");
-      lines.push("输入 " + formatCount(sum.prompt) + "，输出 " + formatCount(sum.completion) + "，共 " + formatCount(sum.count) + " 次。");
+      lines.push(tokenBreakdown(sum) + "共 " + formatCount(sum.count) + " 次。");
       if (parsed.intent === "today") lines.push("同期额度点 " + formatCount(sum.quota) + "，约 " + formatUsd(sum.quota) + "。\n" + moneyNote());
     }
     if (incomplete) lines.push("接口只返回最近一批记录。如果调用很多，更早的用量可能没有算进来。");
-    if (!sum.count && parsed.intent !== "byModel") lines[0] = bounds.label + "没有调用记录，因此 token 和金额都是 0。";
+    caveatLines(Object.assign({}, data, { truncated: incomplete }), sum).forEach(function (line) { lines.push(line); });
+    if (!sum.count && parsed.intent !== "byModel") {
+      lines = lines.filter(function (line) { return line.indexOf("合计") !== 0 && line.indexOf(bounds.label + "，合计") !== 0 && line.indexOf("输入 ") !== 0; });
+      lines.push(bounds.label + "没有调用记录，因此输入、输出和金额都是 0。");
+    }
     return { text: lines.join("\n"), error: false };
+  }
+
+  var PRIVACY_NOTICE = "对话记录默认只保存在这台浏览器，可导出到本地。但只要向模型提问，内容仍会经过网关，离开这台电脑。";
+  var LEGACY_SECRET_KEYS = ["gw.token", "gw.base", "gw.adminUrl", "gw.admin"];
+
+  function purgeLegacySecrets(storage) {
+    if (!storage || typeof storage.removeItem !== "function") return;
+    for (var i = 0; i < LEGACY_SECRET_KEYS.length; i++) storage.removeItem(LEGACY_SECRET_KEYS[i]);
+  }
+
+  function chatRecordKey(username, projectId, agentKey) {
+    return ["v1", String(username || ""), String(projectId || ""), String(agentKey || "")].join("\u001f");
+  }
+
+  function buildChatExport(records, now) {
+    var chats = (records || []).map(function (rec) {
+      return {
+        username: rec.username || "",
+        projectId: rec.projectId || "",
+        projectName: rec.projectName || "",
+        agentKey: rec.agentKey || "",
+        updatedAt: rec.updatedAt || "",
+        messages: (rec.messages || []).map(function (msg) {
+          return {
+            role: msg.role === "user" ? "user" : "assistant",
+            who: msg.who || "",
+            text: redact(msg.text || ""),
+            error: !!msg.error,
+            citations: (msg.citations || []).map(function (cite) {
+              return { filename: cite.filename || "", excerpt: redact(cite.excerpt || "") };
+            })
+          };
+        })
+      };
+    });
+    return JSON.stringify({
+      exportedAt: (now instanceof Date ? now : new Date(now || Date.now())).toISOString(),
+      notice: PRIVACY_NOTICE,
+      chats: chats
+    }, null, 2);
   }
 
   function defaultAdminUrl(locationLike) {
@@ -722,6 +821,10 @@
     classifyLedgerQuestion: classifyLedgerQuestion,
     ledgerHelpText: ledgerHelpText,
     normalizeLedgerLogs: normalizeLedgerLogs,
-    answerLedger: answerLedger
+    answerLedger: answerLedger,
+    PRIVACY_NOTICE: PRIVACY_NOTICE,
+    purgeLegacySecrets: purgeLegacySecrets,
+    chatRecordKey: chatRecordKey,
+    buildChatExport: buildChatExport
   };
 });

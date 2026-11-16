@@ -1,4 +1,4 @@
-# 只启动同事门户。不会创建、停止或替换已经在跑的 new-api 容器。
+# 只启动融光工作站。不会创建、停止或替换已经在跑的 new-api 容器。
 name: gateway-portal
 
 services:
@@ -13,4 +13,12 @@ services:
       - "host.docker.internal:host-gateway"
     environment:
       NEW_API_UPSTREAM: ${NEW_API_UPSTREAM:-host.docker.internal:3000}
-      NGINX_ENVSUBST_FILTER: "^NEW_API_UPSTREAM$$"
+      NEW_API_BASE: ${NEW_API_BASE:-http://host.docker.internal:3000}
+      BFF_UPSTREAM: ${BFF_UPSTREAM:-127.0.0.1:8081}
+      SESSION_SECRET: ${SESSION_SECRET:-}
+      DATA_DIR: /data
+    volumes:
+      - rongguang-data:/data
+
+volumes:
+  rongguang-data:

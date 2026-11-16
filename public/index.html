@@ -7,42 +7,34 @@
   <meta name="theme-color" content="#f3eee4" />
   <title>融光</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-  <script src="js/theme.js?v=3"></script>
-  <link rel="stylesheet" href="css/app.css?v=3" />
+  <script src="js/theme.js?v=4"></script>
+  <link rel="stylesheet" href="css/app.css?v=4" />
 </head>
 <body>
   <div id="login" class="login">
     <div class="login-wall">
       <div class="login-inscription">
         <img class="logo-full" src="logo.svg" alt="融光" />
-        <p class="inscription-note">已接入的模型，收在同一处。<br>厂商密钥留在服务器。</p>
+        <p class="inscription-note">用账号进入工作台</p>
       </div>
-    <form id="loginForm" class="login-card" autocomplete="off">
-      <h1>登录融光</h1>
-      <p class="lead">请粘贴管理员在 New API 签发的网关令牌，一般以 sk- 开头。不要粘贴厂商密钥。</p>
-      <div id="loginError" class="alert" hidden></div>
-      <label class="field">怎么称呼你
-        <input class="input" id="nameInput" maxlength="24" placeholder="只保存在这台浏览器，例如：小王" />
-      </label>
-      <label class="field">网关令牌
-        <span class="token-row">
-          <input class="input" id="tokenInput" type="password" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="sk- 开头，从管理后台的「令牌」页复制" required />
-          <button class="ghost" id="toggleToken" type="button">显示</button>
-        </span>
-      </label>
-      <details class="fold" id="loginAdvanced">
-        <summary>连接设置</summary>
-        <label class="field">API 根地址
-          <input class="input" id="baseInput" spellcheck="false" placeholder="留空即可。本地打开文件时才填 http://43.110.30.115:3000" />
+      <form id="loginForm" class="login-card" autocomplete="on">
+        <h1>登录融光</h1>
+        <div id="loginError" class="alert" hidden></div>
+        <label class="field">用户名
+          <input class="input" id="usernameInput" name="username" autocomplete="username" maxlength="64" spellcheck="false" autocapitalize="off" required />
         </label>
-        <p class="fine">部署到服务器后请保持留空。浏览器只访问融光，由服务器把 /v1 转给已经在跑的 New API。直接双击打开网页文件时，跨域可能被浏览器拦住。</p>
-      </details>
-      <button class="primary block" id="loginSubmit" type="submit">进入融光</button>
-      <div class="login-foot">
-        <span class="fine">令牌相当于密码，只存在这台浏览器里。</span>
-        <button class="icon-btn" id="loginTheme" type="button">深色</button>
-      </div>
-    </form>
+        <label class="field">密码
+          <span class="token-row">
+            <input class="input" id="passwordInput" name="password" type="password" autocomplete="current-password" required />
+            <button class="ghost" id="togglePassword" type="button">显示</button>
+          </span>
+        </label>
+        <button class="primary block" id="loginSubmit" type="submit">进入融光</button>
+        <div class="login-foot">
+          <p class="fine privacy-note" id="privacyLogin">对话记录默认只保存在这台浏览器，可导出到本地。但只要向模型提问，内容仍会经过网关，离开这台电脑。</p>
+          <button class="icon-btn" id="loginTheme" type="button">深色</button>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -64,14 +56,6 @@
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H8l-5 3V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
           对话
         </button>
-        <button type="button" data-tab="channels" id="navChannels" hidden>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="7" height="7" rx="1.5"/><rect x="14" y="4" width="7" height="7" rx="1.5"/><rect x="3" y="15" width="7" height="7" rx="1.5"/><path d="M17.5 15v7M14 18.5h7"/></svg>
-          渠道
-        </button>
-        <button type="button" data-tab="quota">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><circle cx="9.5" cy="7.5" r="3.5"/><path d="M22 21v-2a3.5 3.5 0 0 0-2.6-3.4M16.5 4.2a3.5 3.5 0 0 1 0 6.6"/></svg>
-          成员与额度
-        </button>
       </nav>
       <div class="side-foot">
         <button class="theme-btn" id="themeBtn" type="button">
@@ -88,7 +72,8 @@
           <b id="crumb">工作台</b>
         </div>
         <div class="top-right">
-          <button class="ledger-fab" id="ledgerFab" type="button" aria-label="澄账，查询用量和金额" title="澄账">
+          <button class="project-switch" id="projectSwitch" type="button">未选项目</button>
+          <button class="ledger-fab" id="ledgerFab" type="button" aria-label="澄账，查询当前项目的用量和金额" title="澄账">
             <svg viewBox="0 0 64 64" aria-hidden="true">
               <circle cx="32" cy="32" r="30.25" fill="none" stroke="currentColor" stroke-width="1.25"/>
               <circle cx="32" cy="26" r="8.5" fill="none" stroke="currentColor" stroke-width="1.25"/>
@@ -115,46 +100,40 @@
           <div class="page-head">
             <div>
               <h1>工作台</h1>
-              <p>一个入口使用已经接入的模型。同事只用网关令牌，厂商密钥留在服务器。</p>
+              <p>先选择或创建一个项目，然后使用写作、纪要和项目问答。用量记在这个项目上。</p>
             </div>
           </div>
-          <div class="metrics" id="metrics"></div>
-          <div class="section-title">
-            <h2>推荐智能体</h2>
-            <p>先从对话、看图和写纪要开始</p>
+          <div id="projectError" class="alert" hidden></div>
+          <div id="projectEmpty" class="card project-empty" hidden>
+            <h2>还没有项目</h2>
+            <p class="hint">起一个名字即可。项目钥匙只留在服务器上，页面里不会出现。</p>
+            <form id="createProjectForm">
+              <label class="field">项目名称
+                <input class="input" id="projectNameInput" maxlength="40" placeholder="例如：西湖茶事" />
+              </label>
+              <button class="primary" id="createProjectBtn" type="submit">创建项目</button>
+            </form>
           </div>
-          <div class="agents" id="homeAgents"></div>
-          <div class="card flow-card">
-            <h2>请求怎么走</h2>
-            <p class="hint">同事只访问这台网关。各家厂商的密钥留在服务端，不会发给个人。</p>
-            <div class="flow">
-              <div class="flow-box">
-                <h3><span class="step">1</span>同事的客户端</h3>
-                <ul class="muted-list">
-                  <li>融光，或 Cherry Studio 等应用</li>
-                  <li>地址：<span id="gatewayUrl">/v1</span> <button class="linkish" id="copyUrl" type="button">复制</button></li>
-                  <li>密钥：管理员签发的网关令牌</li>
-                </ul>
-              </div>
-              <div class="arrow">→</div>
-              <div class="flow-box">
-                <h3><span class="step">2</span>本网关</h3>
-                <ul class="muted-list">
-                  <li>鉴权、限额、日志</li>
-                  <li>按模型路由到渠道</li>
-                  <li>统一成 OpenAI 兼容接口</li>
-                </ul>
-              </div>
-              <div class="arrow">→</div>
-              <div class="flow-box">
-                <h3><span class="step">3</span>模型厂商</h3>
-                <ul class="muted-list">
-                  <li>密钥只配置在 New API 里</li>
-                  <li>同事看不到，也不会经过浏览器</li>
-                  <li>具体有哪些模型，以令牌权限为准</li>
-                </ul>
-              </div>
+          <div id="projectPicker" class="card project-picker" hidden>
+            <h2>选择项目</h2>
+            <p class="hint">有多个项目时，要先选一个，才能写作、整理纪要或提问。</p>
+            <div class="project-list" id="projectList"></div>
+            <form id="createAnotherForm" class="inline-create">
+              <input class="input" id="anotherNameInput" maxlength="40" placeholder="新项目的名称" />
+              <button class="ghost" type="submit">创建</button>
+            </form>
+          </div>
+          <div id="workbenchReady" hidden>
+            <form id="createReadyForm" class="inline-create">
+              <input class="input" id="readyNameInput" maxlength="40" placeholder="再创建一个项目" />
+              <button class="ghost" type="submit">创建</button>
+            </form>
+            <div class="metrics" id="metrics"></div>
+            <div class="section-title">
+              <h2>从这个项目开始</h2>
+              <p id="readyProjectName"></p>
             </div>
+            <div class="agents" id="homeAgents"></div>
           </div>
         </section>
 
@@ -162,16 +141,12 @@
           <div class="page-head">
             <div>
               <h1>智能体</h1>
-              <p>面向同事的入口。管理员视图只在这台浏览器勾选后出现，不能代替管理后台。</p>
+              <p>澄账查看当前项目的额度。写作、纪要、看图和对话都记在所选项目上。</p>
             </div>
           </div>
           <div class="section-title"><h2>面向同事</h2></div>
           <div id="ledgerEntry"></div>
           <div class="agents" id="teamAgents"></div>
-          <div id="adminSection" hidden>
-            <div class="section-title section-gap"><h2>仅管理员</h2><p>不默认对全员开放</p></div>
-            <div class="agents" id="adminAgents"></div>
-          </div>
         </section>
 
         <section id="panel-chat" class="panel">
@@ -182,16 +157,26 @@
             </div>
           </div>
           <div class="work">
-            <div class="card">
-              <h2>选择模型</h2>
-              <p class="hint">列表来自这把令牌可以调用的模型。</p>
-              <input class="search" id="modelFilter" type="search" placeholder="筛选模型名称" />
-              <div class="models" id="modelList"></div>
+            <div class="card" id="sideCard">
+              <div id="docPanel" hidden>
+                <h2>项目资料</h2>
+                <p class="hint">项目问答只根据这些文件回答。支持 txt、md、pdf、docx，单个不超过 4MB。</p>
+                <button class="ghost" id="pickDoc" type="button">上传资料</button>
+                <input id="docInput" type="file" accept=".txt,.md,.markdown,.pdf,.docx,text/plain" hidden />
+                <div id="docError" class="alert" hidden></div>
+                <ul class="doc-list" id="docList"></ul>
+              </div>
+              <div id="modelPanel">
+                <h2>选择模型</h2>
+                <p class="hint">列表来自当前项目可以调用的模型。</p>
+                <input class="search" id="modelFilter" type="search" placeholder="筛选模型名称" />
+                <div class="models" id="modelList"></div>
+              </div>
             </div>
             <div class="card stage">
               <div class="stage-head">
                 <div>
-                  <div class="kicker" id="playKicker">团队问答助手</div>
+                  <div class="kicker" id="playKicker">写作</div>
                   <h2 id="playTitle">对话</h2>
                   <p class="hint" id="playHint"></p>
                 </div>
@@ -224,40 +209,9 @@
                     </span>
                   </div>
                 </div>
+                <p class="fine privacy-note" id="privacyComposer">对话记录默认只保存在这台浏览器，可导出到本地。但只要向模型提问，内容仍会经过网关，离开这台电脑。</p>
               </div>
             </div>
-          </div>
-        </section>
-
-        <section id="panel-channels" class="panel">
-          <div class="page-head">
-            <div>
-              <h1>渠道</h1>
-              <p>按模型名称归类，只表示这把令牌能调用什么。看不到厂商密钥，也不能在这里开关渠道。</p>
-            </div>
-          </div>
-          <div class="probe">
-            <button class="ghost" id="probeBtn" type="button">发送一次连通性测试</button>
-            <span class="fine" id="probeResult">会向一个对话模型发送很短的请求，并消耗少量额度。</span>
-          </div>
-          <div class="channels" id="channelCards"></div>
-        </section>
-
-        <section id="panel-quota" class="panel">
-          <div class="page-head">
-            <div>
-              <h1>成员与额度</h1>
-              <p>这里只显示你这把令牌。给同事签发令牌和修改限额，请管理员打开 New API 管理后台。</p>
-            </div>
-          </div>
-          <div class="insight" id="quotaCards"></div>
-          <div class="card table-wrap">
-            <table>
-              <thead>
-                <tr><th class="pad">令牌</th><th>标识</th><th>可用能力</th><th>已用额度</th></tr>
-              </thead>
-              <tbody id="quotaTable"></tbody>
-            </table>
           </div>
         </section>
 
@@ -277,20 +231,9 @@
         <label class="field">怎么称呼你
           <input class="input" id="setName" maxlength="24" />
         </label>
-        <label class="field">API 根地址
-          <input class="input" id="setBase" spellcheck="false" placeholder="留空表示使用当前网站" />
-        </label>
-        <label class="field">更换令牌
-          <input class="input" id="setToken" type="password" spellcheck="false" autocomplete="off" placeholder="留空表示继续用现在这把" />
-        </label>
-        <label class="field">管理后台地址
-          <input class="input" id="setAdminUrl" spellcheck="false" />
-        </label>
-        <label class="check">
-          <input id="setAdmin" type="checkbox" />
-          <span>在这台浏览器显示管理员入口。这只是多两个查看页，不能修改渠道，也看不到厂商密钥。</span>
-        </label>
+        <p class="fine privacy-note" id="privacySettings">对话记录默认只保存在这台浏览器，可导出到本地。但只要向模型提问，内容仍会经过网关，离开这台电脑。</p>
         <div class="modal-actions">
+          <button class="ghost" id="exportChats" type="button">导出对话</button>
           <button class="ghost" id="logoutBtn" type="button">退出登录</button>
           <button class="primary" id="saveSettings" type="submit">保存</button>
         </div>
@@ -299,7 +242,7 @@
   </dialog>
 
   <noscript><p class="noscript">需要启用浏览器的 JavaScript 才能使用融光。</p></noscript>
-  <script src="js/logic.js?v=3"></script>
-  <script src="js/app.js?v=3"></script>
+  <script src="js/logic.js?v=4"></script>
+  <script src="js/app.js?v=4"></script>
 </body>
 </html>

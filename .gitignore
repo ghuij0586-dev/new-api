@@ -1,4 +1,7 @@
 .DS_Store
+data/
+*.sqlite
+*.sqlite-*
 .env
 .env.*
 !.env.example

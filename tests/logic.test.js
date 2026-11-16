@@ -129,10 +129,13 @@ test("澄账 classifies usage questions and refuses to invent numbers", function
   assert.match(help.text, /澄账只查询/);
   assert.equal(/\d{3,}/.test(help.text), false);
   const remain = L.answerLedger("还剩多少额度？", {
-    quota: { name: "周叶", total_granted: 1000000, total_used: 12345, total_available: 987655, unlimited_quota: false }
+    projectName: "西湖茶事",
+    quota: { name: "token-name", total_granted: 1000000, total_used: 12345, total_available: 987655, unlimited_quota: false }
   });
   assert.match(remain.text, /987,655|987655/);
-  assert.match(remain.text, /周叶/);
+  assert.match(remain.text, /西湖茶事/);
+  assert.match(remain.text, /已用额度/);
+  assert.equal(remain.text.includes("token-name"), false);
   const now = new Date(2026, 10, 16, 15, 0, 0);
   const byModel = L.answerLedger("各模型用了多少？", {
     logs: [
@@ -161,7 +164,58 @@ test("澄账 classifies usage questions and refuses to invent numbers", function
   const failed = L.answerLedger("各模型用了多少？", { logError: { title: "调用记录接口返回 404。", detail: "" } });
   assert.equal(failed.error, true);
   assert.match(failed.text, /404/);
+  assert.match(failed.text, /可能偏少/);
   assert.equal(failed.text.includes("180"), false);
+  const withCache = L.answerLedger("用了多少 token？", {
+    projectName: "西湖茶事",
+    logs: [
+      { model_name: "qwen-plus", prompt_tokens: 10, completion_tokens: 4, cache_tokens: 7, quota: 100, created_at: Math.floor(now.getTime() / 1000), type: 2 }
+    ]
+  }, now);
+  assert.match(withCache.text, /输入/);
+  assert.match(withCache.text, /输出/);
+  assert.match(withCache.text, /缓存/);
+  assert.match(withCache.text, /7/);
+  assert.equal(withCache.text.includes("没能从记录里单独列出来"), false);
+  const noCache = L.answerLedger("用了多少 token？", {
+    projectName: "西湖茶事",
+    logs: [
+      { model_name: "qwen-plus", prompt_tokens: 10, completion_tokens: 4, quota: 100, created_at: Math.floor(now.getTime() / 1000), type: 2 }
+    ]
+  }, now);
+  assert.match(noCache.text, /缓存 token 没能从记录里单独列出来/);
+  assert.match(noCache.text, /这些数字可能偏少/);
+  const truncated = L.answerLedger("今天的用量", {
+    projectName: "西湖茶事",
+    truncated: true,
+    logs: [
+      { model_name: "qwen-plus", prompt_tokens: 3, completion_tokens: 1, cache_tokens: 0, quota: 10, created_at: Math.floor(now.getTime() / 1000), type: 2 }
+    ]
+  }, now);
+  assert.match(truncated.text, /可能偏少/);
+  assert.match(truncated.text, /缓存 0|缓存0/);
+});
+
+test("chat export is keyed by account and strips gateway keys", function () {
+  const key = logic.chatRecordKey("xiaowang", "p1", "docs");
+  assert.equal(key.includes("xiaowang"), true);
+  assert.notEqual(logic.chatRecordKey("xiaowang", "p1", "docs"), logic.chatRecordKey("other", "p1", "docs"));
+  const exported = logic.buildChatExport([
+    {
+      username: "xiaowang",
+      projectId: "p1",
+      projectName: "西湖茶事",
+      agentKey: "docs",
+      messages: [{ role: "assistant", text: "地址见 sk-secretKEY123456", citations: [{ filename: "制度.txt", excerpt: "杭州" }] }]
+    }
+  ], new Date("2026-11-16T00:00:00Z"));
+  assert.match(exported, /西湖茶事/);
+  assert.match(exported, /制度\.txt/);
+  assert.equal(exported.includes("sk-secretKEY123456"), false);
+  assert.match(exported, /对话记录默认只保存在这台浏览器/);
+  const storage = { removed: [], removeItem(name) { this.removed.push(name); } };
+  logic.purgeLegacySecrets(storage);
+  assert.ok(storage.removed.includes("gw.token"));
 });
 
 test("admin url follows the page host and keeps the known server as fallback", function () {
